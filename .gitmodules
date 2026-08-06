@@ -1,0 +1,3 @@
+[submodule "src/sgct"]
+	path = src/sgct
+	url = https://github.com/sgct/sgct.git

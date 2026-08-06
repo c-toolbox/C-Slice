@@ -1,0 +1,286 @@
+{
+  "version": 1,
+  "masteraddress": "127.0.0.1",
+  "users": [
+    {
+      "eyeseparation": 0,
+      "pos": {
+        "x": 0,
+        "y": 0,
+        "z": 0
+      }
+    }
+  ],
+  "settings": {
+    "display": {
+      "swapinterval": 0
+    }
+  },
+  "nodes": [
+    {
+      "address": "127.0.0.1",
+      "port": 20401,
+      "windows": [
+        {
+          "name": "GUI",
+          "fullscreen": false,
+          "msaa": 1,
+          "pos": {
+            "x": 0,
+            "y": 30
+          },
+          "size": {
+            "x": 256,
+            "y": 256
+          },
+          "res": {
+            "x": 512,
+            "y": 512
+          },
+          "viewports": [
+            {
+              "pos": {
+                "x": 0,
+                "y": 0
+              },
+              "size": {
+                "x": 1,
+                "y": 1
+              },
+              "projection": {
+                "fov": 180,
+                "quality": "medium",
+                "tilt": 0,
+                "alpha": [
+                  "false"
+                ],
+                "interpolation": "cubic",
+                "type": "FisheyeProjection",
+                "background": {
+                  "r": 0,
+                  "g": 0,
+                  "b": 0,
+                  "a": 1
+                }
+              }
+            }
+          ]
+        },
+        {
+          "name": "Node1",
+          "fullscreen": false,
+          "msaa": 1,
+          "pos": {
+            "x": 0,
+            "y": 310
+          },
+          "size": {
+            "x": 512,
+            "y": 270
+          },
+          "res": {
+            "x": 4096,
+            "y": 2160
+          },
+          "viewports": [
+            {
+              "user": "Projector1",
+              "projection": {
+                "type": "PlanarProjection",
+                "fov": {
+                  "left": 50,
+                  "right": 57,
+                  "up": 36,
+                  "down": 30
+                },
+                "orientation": {
+                  "pitch": 35,
+                  "roll": 0,
+                  "yaw": -46
+                }
+              }
+            }
+          ]
+        },
+        {
+          "name": "Node2",
+          "fullscreen": false,
+          "msaa": 1,
+          "pos": {
+            "x": 530,
+            "y": 310
+          },
+          "size": {
+            "x": 512,
+            "y": 270
+          },
+          "res": {
+            "x": 4096,
+            "y": 2160
+          },
+          "viewports": [
+            {
+              "user": "Projector2",
+              "projection": {
+                "type": "PlanarProjection",
+                "fov": {
+                  "left": 50,
+                  "right": 54,
+                  "up": 36,
+                  "down": 30
+                },
+                "orientation": {
+                  "pitch": 35,
+                  "roll": 0,
+                  "yaw": 45
+                }
+              }
+            }
+          ]
+        },
+        {
+          "name": "Node3",
+          "fullscreen": false,
+          "msaa": 1,
+          "pos": {
+            "x": 1060,
+            "y": 310
+          },
+          "size": {
+            "x": 512,
+            "y": 270
+          },
+          "res": {
+            "x": 4096,
+            "y": 2160
+          },
+          "viewports": [
+            {
+              "user": "Projector3",
+              "projection": {
+                "type": "PlanarProjection",
+                "fov": {
+                  "left": 50,
+                  "right": 52,
+                  "up": 36,
+                  "down": 30
+                },
+                "orientation": {
+                  "pitch": 34,
+                  "roll": 0,
+                  "yaw": 135
+                }
+              }
+            }
+          ]
+        },
+        {
+          "name": "Node4",
+          "fullscreen": false,
+          "msaa": 1,
+          "pos": {
+            "x": 0,
+            "y": 600
+          },
+          "size": {
+            "x": 512,
+            "y": 270
+          },
+          "res": {
+            "x": 4096,
+            "y": 2160
+          },
+          "viewports": [
+            {
+              "user": "Projector4",
+              "projection": {
+                "type": "PlanarProjection",
+                "fov": {
+                  "left": 53,
+                  "right": 56,
+                  "up": 36,
+                  "down": 30
+                },
+                "orientation": {
+                  "pitch": 34,
+                  "roll": 0,
+                  "yaw": -135
+                }
+              }
+            }
+          ]
+        },
+        {
+          "name": "Node5",
+          "fullscreen": false,
+          "msaa": 1,
+          "pos": {
+            "x": 530,
+            "y": 600
+          },
+          "size": {
+            "x": 512,
+            "y": 270
+          },
+          "res": {
+            "x": 4096,
+            "y": 2160
+          },
+          "viewports": [
+            {
+              "user": "Projector5",
+              "projection": {
+                "type": "PlanarProjection",
+                "fov": {
+                  "up": 39,
+                  "down": 20,
+                  "hfov": 98
+                },
+                "orientation": {
+                  "pitch": 59,
+                  "roll": 0,
+                  "yaw": 57
+                }
+              }
+            }
+          ]
+        },
+        {
+          "name": "Node6",
+          "fullscreen": false,
+          "msaa": 1,
+          "pos": {
+            "x": 1060,
+            "y": 600
+          },
+          "size": {
+            "x": 512,
+            "y": 270
+          },
+          "res": {
+            "x": 4096,
+            "y": 2160
+          },
+          "viewports": [
+            {
+              "user": "Projector6",
+              "projection": {
+                "type": "PlanarProjection",
+                "fov": {
+                  "up": 42,
+                  "down": 20,
+                  "hfov": 100
+                },
+                "orientation": {
+                  "pitch": 60,
+                  "roll": 0,
+                  "yaw": -123
+                }
+              }
+            }
+          ]
+        }
+      ]
+    }
+  ]
+}

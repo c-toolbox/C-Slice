@@ -1,0 +1,3 @@
+copy "@C_STITCH_BIN_DIR@\C-Stitch.exe" ".\@CMAKE_INSTALL_BINDIR@\"
+7z a @CRAFTKIT_PACKNAME@.zip .\@CMAKE_INSTALL_BINDIR@\* LICENSE.txt
+pause

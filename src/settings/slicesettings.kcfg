@@ -1,0 +1,199 @@
+﻿<?xml version="1.0" encoding="UTF-8"?>
+<!--
+ SPDX-FileCopyrightText: 2026 Erik Sundén
+ SPDX-License-Identifier: GPL-3.0-or-later
+ -->
+<kcfg xmlns="http://www.kde.org/standards/kcfg/1.0"
+      xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+      xsi:schemaLocation="http://www.kde.org/standards/kcfg/1.0
+                          http://www.kde.org/standards/kcfg/1.0/kcfg.xsd" >
+  <kcfgfile name="C-Slice/cslice.conf" />
+  <group name="ApplicationSettings">
+    <entry name="Configuration2D" type="String">
+      <label>Default SGCT configuration for mono/2D output.</label>
+      <default>configs/nrkp_mono_2026.json</default>
+    </entry>
+    <entry name="Configuration3D" type="String">
+      <label>Default SGCT configuration for stereo/3D output.</label>
+      <default>configs/nrkp_stereo_2026.json</default>
+    </entry>
+    <entry name="Format" type="String">
+      <label>Default surface to map onto.</label>
+      <default>Dome</default>
+    </entry>
+    <entry name="SurfaceRadius" type="Double">
+      <label>Default dome/sphere radius in centimeters.</label>
+      <default>740.0</default>
+    </entry>
+    <entry name="SurfaceFov" type="Double">
+      <label>Default dome field of view in degrees.</label>
+      <default>165.0</default>
+    </entry>
+    <entry name="LayerPitch" type="Double">
+      <label>Default dome/sphere layer pitch in degrees.</label>
+      <default>0.0</default>
+    </entry>
+    <entry name="LayerYaw" type="Double">
+      <label>Default dome/sphere layer yaw in degrees.</label>
+      <default>0.0</default>
+    </entry>
+    <entry name="LayerRoll" type="Double">
+      <label>Default dome/sphere layer roll in degrees.</label>
+      <default>0.0</default>
+    </entry>
+    <entry name="PlaneAzimuth" type="Double">
+      <label>Default plane azimuth in degrees.</label>
+      <default>0.0</default>
+    </entry>
+    <entry name="PlaneElevation" type="Double">
+      <label>Default plane elevation in degrees.</label>
+      <default>45.0</default>
+    </entry>
+    <entry name="PlaneRoll" type="Double">
+      <label>Default plane roll in degrees.</label>
+      <default>0.0</default>
+    </entry>
+    <entry name="PlaneDistance" type="Double">
+      <label>Default plane distance in centimeters.</label>
+      <default>740.0</default>
+    </entry>
+    <entry name="PlaneHorizontal" type="Double">
+      <label>Default plane horizontal offset in centimeters.</label>
+      <default>0.0</default>
+    </entry>
+    <entry name="PlaneVertical" type="Double">
+      <label>Default plane vertical offset in centimeters.</label>
+      <default>0.0</default>
+    </entry>
+    <entry name="PlaneWidth" type="Double">
+      <label>Default plane width in centimeters. A value of zero uses the surface-radius default.</label>
+      <default>0.0</default>
+    </entry>
+    <entry name="PlaneHeight" type="Double">
+      <label>Default plane height in centimeters. A value of zero uses the surface-radius default.</label>
+      <default>0.0</default>
+    </entry>
+    <entry name="MaxEncoderThreads" type="Int">
+      <label>Default maximum encoder threads.</label>
+      <default>16</default>
+    </entry>
+    <entry name="ImageBufferingThreadCount" type="Int">
+      <label>Image loading thread count.</label>
+      <default>8</default>
+    </entry>
+    <entry name="CaptureGpuSlots" type="Int">
+      <label>GPU readback slots for capture.</label>
+      <default>4</default>
+    </entry>
+    <entry name="ImageErrorBehavior" type="String">
+      <label>Default behavior when an image cannot be read during rendering.</label>
+      <default>Continue</default>
+    </entry>
+    <entry name="ImageSizeWarningPercent" type="Int">
+      <label>Warn when a verified image file is this percentage smaller than a neighboring image file. A value of zero disables the warning.</label>
+      <default>25</default>
+    </entry>
+    <entry name="Codec" type="String">
+      <label>Default output codec.</label>
+      <default>H265</default>
+    </entry>
+    <entry name="FrameRateNum" type="Int">
+      <label>Default output frame rate numerator.</label>
+      <default>1</default>
+    </entry>
+    <entry name="FrameRateDen" type="Int">
+      <label>Default output frame rate denominator.</label>
+      <default>30</default>
+    </entry>
+    <entry name="PreferNtscOutputFrameRates" type="Bool">
+      <label>Prefer 29.97 and 59.94 output frame rates when 30 and 60 fps input rates are selected.</label>
+      <default>false</default>
+    </entry>
+    <entry name="SoftwarePreset" type="String">
+      <label>Default software encoder preset.</label>
+      <default>ultrafast</default>
+    </entry>
+    <entry name="NvencPreset" type="String">
+      <label>Default NVENC encoder preset.</label>
+      <default>High quality (P6)</default>
+    </entry>
+    <entry name="LibxTune" type="String">
+      <label>Default software encoder tune.</label>
+      <default>fastdecode</default>
+    </entry>
+    <entry name="NvencTune" type="String">
+      <label>Default NVENC encoder tune.</label>
+      <default>High quality</default>
+    </entry>
+    <entry name="NvencHardwareFrames" type="Bool">
+      <label>Use CUDA hardware frames for NVENC encoding when available.</label>
+      <default>false</default>
+    </entry>
+    <entry name="EncodingBitDepth" type="Int">
+      <label>Default encoding bit depth.</label>
+      <default>10</default>
+    </entry>
+    <entry name="CRF" type="Int">
+      <label>Default constant rate factor.</label>
+      <default>28</default>
+    </entry>
+    <entry name="CQ" type="Int">
+      <label>Default constant quality for NVENC.</label>
+      <default>26</default>
+    </entry>
+    <entry name="QScale" type="Int">
+      <label>Default qscale for non-CRF quality codecs.</label>
+      <default>12</default>
+    </entry>
+    <entry name="UseOnlyIframes" type="Bool">
+      <label>Use only I-frames for encoding (all-intra).</label>
+      <default>false</default>
+    </entry>
+    <entry name="GopSizeSeconds" type="Double">
+      <label>GOP size in seconds used when manual I-frame control is enabled.</label>
+      <default>1.0</default>
+    </entry>
+    <entry name="ParamFile" type="String">
+      <label>Default FFmpeg parameter file.</label>
+      <default></default>
+    </entry>
+    <entry name="FirstLeftInputLocation" type="String">
+      <label>Folder to open first for left/input image selection.</label>
+      <default></default>
+    </entry>
+    <entry name="FirstRightInputLocation" type="String">
+      <label>Folder to open first for right-eye image selection.</label>
+      <default></default>
+    </entry>
+    <entry name="FirstOutputDirectoryLocation" type="String">
+      <label>Folder to open first for output directory selection.</label>
+      <default></default>
+    </entry>
+    <entry name="PreferMatroska" type="Bool">
+      <label>Prefer Matroska container for compatible video codecs.</label>
+      <default>false</default>
+    </entry>
+    <entry name="VideoDecodingMode" type="String">
+      <label>Default video decoding mode. "Software" uses software rendering (default, most compatible). "Hardware" disables software rendering for hardware decoding. "Hybrid" uses hardware decoding for the left eye and software rendering for the right eye.</label>
+      <default>Software</default>
+    </entry>
+    <entry name="InputFrameRateTolerance" type="Double">
+      <label>Tolerance in FPS for matching detected frame rates to standard presets (30, 60, 29.97, 59.94). A higher value matches more values, lower requires closer matches.</label>
+      <default>0.07</default>
+    </entry>
+  </group>
+  <group name="SystemSettings">
+    <entry name="LastLeftFileDialogLocation" type="String">
+      <label>Last folder used by the left/input file dialog.</label>
+      <default></default>
+    </entry>
+    <entry name="LastRightFileDialogLocation" type="String">
+      <label>Last folder used by the right-eye file dialog.</label>
+      <default></default>
+    </entry>
+    <entry name="LastOutputPathDialogLocation" type="String">
+      <label>Last folder used by the output directory dialog.</label>
+      <default></default>
+    </entry>
+  </group>
+</kcfg>

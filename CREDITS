@@ -1,0 +1,11 @@
+For creation of C-Split in general:
+Erik Sundén.
+As a manager and developer of specialized immersive arenas, relying on general media tools to do your bidding is not always easy.
+However, you also do not want to be stuck with limitation that comes with the limited time one person or small team can produce, compared to a commerical company.
+Without open-source libraries to be the puzzle pieces of this unique media player, the ease-of-use and high performance would not be possible.
+
+So special thanks to:
+Alexander Bock, for extensive work on SGCT (simple graphics cluster toolkit) and creation of C-Troll (to manage launch in clustered environments).
+Miroslav Andel, creator of SGCT, and work on stitcher and splitters until 2015.
+And above all, big thanks to all the people behind FFmpeg, and the ongoing effort in high performance media playback.
+

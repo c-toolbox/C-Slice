@@ -1,0 +1,67 @@
+{
+    "layouts": [
+        {
+            "name": "Stereo",
+            "channels": [
+                "0: Left",
+                "1: Right"
+            ]
+        },
+        {
+            "name": "5.1",
+            "channels": [
+                "0: Front left",
+                "1: Front right",
+                "2: Front center",
+                "3: Low frequency",
+                "4: Back left",
+                "5: Back right"
+            ]
+        },
+        {
+            "name": "7.1",
+            "channels": [
+                "0: Front left",
+                "1: Front right",
+                "2: Front center",
+                "3: Low frequency",
+                "4: Back left",
+                "5: Back right",
+                "6: Side left",
+                "7: Side right"
+            ]
+        },
+        {
+            "name": "9.1",
+            "channels": [
+                "0: Front left",
+                "1: Front right",
+                "2: Front center",
+                "3: Low frequency",
+                "4: Back left",
+                "5: Back right",
+                "6: Side left",
+                "7: Side right",
+                "8: Upper front left",
+                "9: Upper front right"
+            ]
+        },
+        {
+            "name": "Nrkp Dome",
+            "channels": [
+                "01: Front left",
+                "02: Front right",
+                "03: Front center",
+                "04: Low frequency",
+                "05: Side left",
+                "06: Side right",
+                "07: Door left",
+                "08: Door right",
+                "09: TG CH1",
+                "10: TG CH2",
+                "11: TG CH3",
+                "12: TG CH4"
+            ]
+        }
+    ]
+}

@@ -1,0 +1,12 @@
+{
+  "codecParameters": {
+    "options": [
+      {
+        "name": "chunks",
+        "value": "12"
+      }
+    ],
+    "pixelFormats": [],
+    "videoFilters": []
+  }
+}

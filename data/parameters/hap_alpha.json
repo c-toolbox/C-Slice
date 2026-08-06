@@ -1,0 +1,16 @@
+{
+  "codecParameters": {
+    "options": [
+      {
+        "name": "format",
+        "value": "hap_alpha"
+      },
+      {
+        "name": "chunks",
+        "value": "12"
+      }
+    ],
+    "pixelFormats": [],
+    "videoFilters": []
+  }
+}

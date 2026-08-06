@@ -1,0 +1,16 @@
+{
+  "codecParameters": {
+    "options": [
+      {
+        "name": "tune",
+        "value": "fastdecode"
+      },
+      {
+        "name": "x265-params",
+        "value": "keyint=1"
+      }
+    ],
+    "pixelFormats": [],
+    "videoFilters": []
+  }
+}

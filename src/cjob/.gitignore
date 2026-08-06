@@ -1,0 +1,20 @@
+# Build artifacts
+build/
+Build/
+cmake-build-*/
+
+# IDE files
+.vscode/
+.idea/
+*.sln
+*.vcxproj*
+CMakeCache.txt
+
+# Generated files
+*.moc
+*.rc
+*.qrc.cpp
+
+# OS files
+.DS_Store
+Thumbs.db

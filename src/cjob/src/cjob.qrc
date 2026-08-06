@@ -1,0 +1,8 @@
+<RCC>
+    <qresource prefix="/">
+        <file>data/images/C_transparent.png</file>
+    </qresource>
+    <qresource prefix="/qt/qml/org/ctoolbox/cjob">
+        <file>qml/CJobMain.qml</file>
+    </qresource>
+</RCC>

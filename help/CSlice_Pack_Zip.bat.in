@@ -1,0 +1,2 @@
+7z a @CSLICE_PACKNAME@.zip .\@CMAKE_INSTALL_BINDIR@\* LICENSE.txt
+pause

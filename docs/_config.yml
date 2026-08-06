@@ -1,0 +1,26 @@
+# For development use, run "bundle install", then line below for serving the site.
+# bundle exec jekyll serve --livereload
+
+theme: "just-the-docs"
+
+title: C-Slice
+description: Open source media encoder for clustered environments
+logo: "/assets/C_transparent.png"
+favicon_ico: "/assets/C_transparent.ico"
+
+search_tokenizer_separator: /[\s/]+/
+footer_content: "Copyright &copy; 2026 Erik Sundén. Distributed by an <a href=\"https://github.com/c-toolbox/C-Slice/tree/master/LICENSE.txt\">GNU General Public License v3.0.</a>"
+color_scheme: "dark"
+
+aux_links:
+  "C-Slice on GitHub":
+    - "//github.com/c-toolbox/C-Slice"
+    
+defaults:
+  - scope:
+      path: ""
+    values:
+      layout: default
+
+exclude:
+  - guides/build/dependencies/
