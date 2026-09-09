@@ -1,4 +1,4 @@
-﻿/*
+/*
  * SPDX-FileCopyrightText:
  * 2026 Erik Sundén
  *
@@ -13,6 +13,7 @@
 #include "slicesettings.h"
 
 #include <QCoreApplication>
+#include <QDateTime>
 #include <QDir>
 #include <QFile>
 #include <QFileInfo>
@@ -20,6 +21,7 @@
 #include <QIcon>
 #include <QIODevice>
 #include <QModelIndex>
+#include <QMutex>
 #include <QQmlApplicationEngine>
 #include <QQmlContext>
 #include <QQmlEngine>
@@ -27,6 +29,9 @@
 #include <QQuickStyle>
 #include <QQuickWindow>
 #include <QSGRendererInterface>
+#include <QStandardPaths>
+
+#include <cstdio>
 
 #include <KAboutData>
 #include <KColorSchemeManager>
@@ -56,6 +61,91 @@ QString defaultSliceDataPath(const QString &relativePath)
     return QDir::toNativeSeparators(dataPath);
 }
 
+// C-Slice is a GUI application with no console, so qWarning()/qDebug() output would
+// otherwise be lost. This handler appends every Qt log message to a log file (and
+// mirrors it to stderr for developer visibility) so problems can be inspected on
+// non-developer machines. The path is resolved lazily and cached: the primary location
+// is <appdir>/data/log next to the installation, falling back to the per-user app-data
+// directory when that folder cannot be created or written (e.g. a read-only install).
+QString csliceLogFilePath()
+{
+    static QString cached;
+    if (!cached.isEmpty()) {
+        return cached;
+    }
+
+    auto isWritableDir = [](const QString &dir) {
+        // Probe by creating and removing a temporary file in the directory.
+        const QString probe = QDir(dir).filePath(QStringLiteral(".cslice_log_probe"));
+        QFile file(probe);
+        if (!file.open(QIODevice::WriteOnly)) {
+            return false;
+        }
+        file.close();
+        QFile::remove(probe);
+        return true;
+    };
+
+    const QString primaryDir = QDir(QCoreApplication::applicationDirPath()).filePath(QStringLiteral("data/log"));
+    if ((!QDir(primaryDir).exists() && !QDir().mkpath(primaryDir)) || !isWritableDir(primaryDir)) {
+        cached = QDir(QStandardPaths::writableLocation(QStandardPaths::AppDataLocation)).filePath(QStringLiteral("cslice.log"));
+    }
+    else {
+        cached = QDir(primaryDir).filePath(QStringLiteral("cslice.log"));
+    }
+    return cached;
+}
+
+void fileMessageHandler(QtMsgType type, const QMessageLogContext &context, const QString &msg)
+{
+    static QMutex mutex;
+    QMutexLocker locker(&mutex);
+
+    // Mirror to stderr so developers running from a console/debugger still see it.
+    fprintf(stderr, "%s\n", msg.toLocal8Bit().constData());
+
+    QString level = QStringLiteral("debug");
+    switch (type) {
+    case QtInfoMsg:
+        level = QStringLiteral("info");
+        break;
+    case QtWarningMsg:
+        level = QStringLiteral("warning");
+        break;
+    case QtCriticalMsg:
+        level = QStringLiteral("critical");
+        break;
+    case QtFatalMsg:
+        level = QStringLiteral("fatal");
+        break;
+    default:
+        break; // QtDebugMsg
+    }
+
+    QString line = QStringLiteral("[%1] [%2] %3")
+                       .arg(QDateTime::currentDateTime().toString(QStringLiteral("yyyy-MM-dd hh:mm:ss.zzz")),
+                            level, msg);
+    if (context.function != nullptr) {
+        line += QStringLiteral(" (%1)").arg(QString::fromUtf8(context.function));
+    }
+
+    const QString path = csliceLogFilePath();
+    QDir().mkpath(QFileInfo(path).absolutePath());
+    QFile file(path);
+    if (file.open(QIODevice::Append | QIODevice::Text)) {
+        file.write(line.toUtf8() + '\n');
+    }
+
+    if (type == QtFatalMsg) {
+        abort();
+    }
+}
+
+void installFileMessageHandler()
+{
+    qInstallMessageHandler(fileMessageHandler);
+}
+
 } // namespace
 
 static QGuiApplication *createApplication(int &argc, char **argv)
@@ -73,6 +163,10 @@ static QGuiApplication *createApplication(int &argc, char **argv)
     QQuickStyle::setStyle(QStringLiteral("org.kde.desktop"));
     QQuickStyle::setFallbackStyle(QStringLiteral("Fusion"));
     QQuickWindow::setGraphicsApi(QSGRendererInterface::OpenGL);
+
+    // Capture Qt log messages (qWarning/qDebug/etc.) to a file so they can be inspected
+    // on machines without a console. Installed after the org/app names are set above.
+    installFileMessageHandler();
 
     QGuiApplication *app = new QGuiApplication(argc, argv);
     QIcon::setFallbackThemeName(QStringLiteral("breeze"));

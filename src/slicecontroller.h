@@ -28,6 +28,11 @@ class VideoMetadataThread;
 class SliceController : public QObject {
     Q_OBJECT
     Q_PROPERTY(QString configuration READ configuration WRITE setConfiguration NOTIFY configurationChanged)
+    Q_PROPERTY(QString configStatus READ configStatus NOTIFY configStatusChanged)
+    Q_PROPERTY(bool warpingFilesMissing READ warpingFilesMissing NOTIFY configFeatureIssuesChanged)
+    Q_PROPERTY(bool blendMaskFilesMissing READ blendMaskFilesMissing NOTIFY configFeatureIssuesChanged)
+    Q_PROPERTY(bool warpingAvailable READ warpingAvailable NOTIFY configFeatureAvailabilityChanged)
+    Q_PROPERTY(bool blendMaskAvailable READ blendMaskAvailable NOTIFY configFeatureAvailabilityChanged)
     Q_PROPERTY(QString inputType READ inputType WRITE setInputType NOTIFY inputTypeChanged)
     Q_PROPERTY(QString leftInput READ leftInput WRITE setLeftInput NOTIFY leftInputChanged)
     Q_PROPERTY(QString rightInput READ rightInput WRITE setRightInput NOTIFY rightInputChanged)
@@ -149,6 +154,12 @@ public:
 
     QString configuration() const;
     void setConfiguration(const QString &configuration);
+    Q_INVOKABLE QString configurationDialogFolder() const;
+    QString configStatus() const;
+    bool warpingFilesMissing() const;
+    bool blendMaskFilesMissing() const;
+    bool warpingAvailable() const;
+    bool blendMaskAvailable() const;
 
     QString inputType() const;
     void setInputType(const QString &inputType);
@@ -416,6 +427,9 @@ public:
 
 Q_SIGNALS:
     void configurationChanged();
+    void configStatusChanged();
+    void configFeatureIssuesChanged();
+    void configFeatureAvailabilityChanged();
     void inputTypeChanged();
     void leftInputChanged();
     void rightInputChanged();
@@ -505,6 +519,9 @@ private:
     void setOutputDirectoryDialogLocation(const QString &path, bool persist = true);
     void resetDialogLocationsFromSettings();
     void setSequenceStatus(const QString &status);
+    void setConfigStatus(const QString &status);
+    void setConfigFeatureIssues(bool warpingMissing, bool blendMaskMissing);
+    void applyConfigFeatureAvailability(bool warpingAvailable, bool blendMaskAvailable);
     void setSequenceIndexing(bool sequenceIndexing);
     void refreshImageSequenceStatus(bool adoptDetectedRange, bool scanLeft, bool scanRight);
     void refreshVideoMetadataStatus(bool adoptDetectedRange, bool probeLeft, bool probeRight);
@@ -543,6 +560,11 @@ private:
     bool canPersistInternalQueue(QString *error) const;
 
     QString m_configuration;
+    QString m_configStatus;
+    bool m_warpingFilesMissing = false;
+    bool m_blendMaskFilesMissing = false;
+    bool m_warpingAvailable = false;
+    bool m_blendMaskAvailable = false;
     QString m_inputType = QStringLiteral("Image sequence");
     QString m_leftInput;
     QString m_rightInput;

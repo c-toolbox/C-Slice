@@ -293,6 +293,22 @@ QString cleanNativePath(const QString &path)
     return QDir::toNativeSeparators(QDir::cleanPath(path));
 }
 
+// SGCT resolves relative asset paths (mesh, blendmask, ...) against the directory that
+// contains the config file, so mirror that rule when validating referenced files.
+QString resolveConfigAssetPath(const QString &configPath, const QString &assetPath)
+{
+    const QString trimmed = QDir::fromNativeSeparators(assetPath.trimmed());
+    if (trimmed.isEmpty()) {
+        return QString();
+    }
+    if (QDir::isAbsolutePath(trimmed)) {
+        return QDir::cleanPath(trimmed);
+    }
+
+    const QFileInfo configInfo(absolutePathFromWorkingDirectory(configPath));
+    return QDir::cleanPath(QDir(configInfo.absolutePath()).filePath(trimmed));
+}
+
 QString ffmpegExecutable()
 {
 #ifdef Q_OS_WIN
@@ -550,14 +566,22 @@ QStringList outputNamesInConfiguration(const QString &path)
 struct ConfigFeatureFlags {
     bool warping = false;
     bool blendMask = false;
+    QStringList meshPaths;
+    QStringList blendMaskPaths;
 };
 
+void addConfigFeaturePath(QStringList &paths, const QString &value)
+{
+    const QString trimmed = value.trimmed();
+    if (!trimmed.isEmpty() && !paths.contains(trimmed)) {
+        paths << trimmed;
+    }
+}
+
+// The scan intentionally visits the whole document (no early exit once both features are
+// found) so that every referenced mesh/blendmask path is collected for existence checks.
 void scanConfigFeatures(const QJsonValue &value, ConfigFeatureFlags &features)
 {
-    if (features.warping && features.blendMask) {
-        return;
-    }
-
     if (value.isObject()) {
         const QJsonObject object = value.toObject();
         for (auto it = object.constBegin(); it != object.constEnd(); ++it) {
@@ -565,9 +589,11 @@ void scanConfigFeatures(const QJsonValue &value, ConfigFeatureFlags &features)
             const bool hasValue = !it.value().isNull() && !it.value().isUndefined() && !(it.value().isString() && it.value().toString().trimmed().isEmpty());
             if (hasValue && key == QStringLiteral("mesh")) {
                 features.warping = true;
+                addConfigFeaturePath(features.meshPaths, it.value().toString());
             }
             else if (hasValue && (key == QStringLiteral("blendmask") || key == QStringLiteral("blacklevelmask"))) {
                 features.blendMask = true;
+                addConfigFeaturePath(features.blendMaskPaths, it.value().toString());
             }
             scanConfigFeatures(it.value(), features);
         }
@@ -580,11 +606,17 @@ void scanConfigFeatures(const QJsonValue &value, ConfigFeatureFlags &features)
     }
 }
 
-ConfigFeatureFlags configFeatures(const QString &path)
+ConfigFeatureFlags configFeatures(const QString &path, bool *fileReadable = nullptr)
 {
+    if (fileReadable != nullptr) {
+        *fileReadable = false;
+    }
     QFile file(path);
     if (!file.open(QIODevice::ReadOnly)) {
         return {};
+    }
+    if (fileReadable != nullptr) {
+        *fileReadable = true;
     }
 
     const QJsonDocument document = QJsonDocument::fromJson(file.readAll());
@@ -1370,6 +1402,23 @@ void SliceController::setConfiguration(const QString &configuration)
     notifyCommandChanged();
 }
 
+QString SliceController::configurationDialogFolder() const
+{
+    // Resolve the configured path against the application/data roots so that relative paths
+    // (e.g. "configs/nrkp_mono_2026.json") yield a real directory to open in.
+    const QString resolved = configuredSlicePath(m_configuration, QStringLiteral("configs/default.json"));
+    QFileInfo info(resolved);
+    if (info.isAbsolute()) {
+        const QString dir = info.absolutePath();
+        if (QDir(dir).exists()) {
+            return QDir::toNativeSeparators(dir);
+        }
+    }
+
+    // Fall back to the default configs folder when the configured path does not point into an existing directory.
+    return defaultSliceDataPath(QStringLiteral("configs"));
+}
+
 QString SliceController::inputType() const { return m_inputType; }
 void SliceController::setInputType(const QString &inputType)
 {
@@ -1389,15 +1438,69 @@ void SliceController::setInputType(const QString &inputType)
 
 void SliceController::updateConfigFeatureOptions()
 {
-    const ConfigFeatureFlags features = configFeatures(configuredSlicePath(m_configuration, QStringLiteral("configs/default.json")));
-    if (features.warping && !m_warping) {
-        m_warping = true;
-        Q_EMIT warpingChanged();
+    const QString configPath = configuredSlicePath(m_configuration, QStringLiteral("configs/default.json"));
+    bool fileReadable = false;
+    const ConfigFeatureFlags features = configFeatures(configPath, &fileReadable);
+
+    // The per-file details can grow long, so the UI only shows a short warning label and
+    // the full resolved paths are written to the log instead.
+    if (!fileReadable) {
+        appendLog(QStringLiteral("Could not read SGCT config: %1").arg(cleanNativePath(configPath)));
+        setConfigFeatureIssues(false, false);
+        applyConfigFeatureAvailability(false, false);
+        setConfigStatus(QStringLiteral("Could not read SGCT config. See the Log for details."));
+        return;
     }
-    if (features.blendMask && !m_blendMask) {
-        m_blendMask = true;
-        Q_EMIT blendMaskChanged();
+
+    QStringList missingLines;
+    int missingMeshCount = 0;
+    for (const QString &meshPath : features.meshPaths) {
+        const QString resolvedPath = resolveConfigAssetPath(configPath, meshPath);
+        if (!QFileInfo::exists(resolvedPath)) {
+            ++missingMeshCount;
+            missingLines << QStringLiteral("Missing warping mesh: %1").arg(cleanNativePath(resolvedPath));
+        }
     }
+
+    int missingMaskCount = 0;
+    for (const QString &maskPath : features.blendMaskPaths) {
+        const QString resolvedPath = resolveConfigAssetPath(configPath, maskPath);
+        if (!QFileInfo::exists(resolvedPath)) {
+            ++missingMaskCount;
+            missingLines << QStringLiteral("Missing blend mask: %1").arg(cleanNativePath(resolvedPath));
+        }
+    }
+
+    // A feature is only usable when the config references files for it and every referenced file
+    // exists. Otherwise its checkbox must stay disabled and unchecked so sgct is never launched
+    // with -warping/-blend-mask pointing at missing assets.
+    applyConfigFeatureAvailability(features.warping && missingMeshCount == 0,
+                                   features.blendMask && missingMaskCount == 0);
+
+    if (!missingLines.isEmpty()) {
+        appendLog(missingLines.join(QLatin1Char('\n')));
+        QStringList issues;
+        if (missingMeshCount > 0) {
+            issues << QStringLiteral("warping mesh");
+        }
+        if (missingMaskCount > 0) {
+            issues << QStringLiteral("blend mask");
+        }
+        const QString summary = issues.size() == 1 ? issues.first() : QStringLiteral("%1 and %2").arg(issues.at(0), issues.at(1));
+        setConfigFeatureIssues(missingMeshCount > 0, missingMaskCount > 0);
+        setConfigStatus(QStringLiteral("Missing %1 file(s). See the Log for details.").arg(summary));
+        return;
+    }
+
+    QStringList statusDetails;
+    if (features.warping) {
+        statusDetails << QStringLiteral("warping mesh found");
+    }
+    if (features.blendMask) {
+        statusDetails << QStringLiteral("blend mask found");
+    }
+    setConfigFeatureIssues(false, false);
+    setConfigStatus(statusDetails.join(QStringLiteral(" | ")));
 }
 
 QString SliceController::leftInput() const { return m_leftInput; }
@@ -1517,6 +1620,10 @@ bool SliceController::warping() const { return m_warping; }
 void SliceController::setWarping(bool warping)
 {
     if (m_warping == warping) return;
+    // Enabling is only possible when the current config provides usable warping files.
+    if (warping && !m_warpingAvailable) {
+        return;
+    }
     m_warping = warping;
     Q_EMIT warpingChanged();
     notifyCommandChanged();
@@ -1526,6 +1633,10 @@ bool SliceController::blendMask() const { return m_blendMask; }
 void SliceController::setBlendMask(bool blendMask)
 {
     if (m_blendMask == blendMask) return;
+    // Enabling is only possible when the current config provides usable blend mask files.
+    if (blendMask && !m_blendMaskAvailable) {
+        return;
+    }
     m_blendMask = blendMask;
     Q_EMIT blendMaskChanged();
     notifyCommandChanged();
@@ -2159,6 +2270,11 @@ QStringList SliceController::presetNames() const
 }
 QString SliceController::logText() const { return m_logText; }
 QString SliceController::sequenceStatus() const { return m_sequenceStatus; }
+QString SliceController::configStatus() const { return m_configStatus; }
+bool SliceController::warpingFilesMissing() const { return m_warpingFilesMissing; }
+bool SliceController::blendMaskFilesMissing() const { return m_blendMaskFilesMissing; }
+bool SliceController::warpingAvailable() const { return m_warpingAvailable; }
+bool SliceController::blendMaskAvailable() const { return m_blendMaskAvailable; }
 bool SliceController::sequenceIndexing() const { return m_sequenceIndexing; }
 bool SliceController::hasIndexedRange() const { return m_hasIndexedRange; }
 int SliceController::indexedStartIndex() const { return m_indexedStartIndex; }
@@ -3636,6 +3752,56 @@ void SliceController::setSequenceStatus(const QString &status)
     }
     m_sequenceStatus = status;
     Q_EMIT sequenceStatusChanged();
+}
+
+void SliceController::setConfigStatus(const QString &status)
+{
+    if (m_configStatus == status) {
+        return;
+    }
+    m_configStatus = status;
+    Q_EMIT configStatusChanged();
+}
+
+void SliceController::setConfigFeatureIssues(bool warpingMissing, bool blendMaskMissing)
+{
+    if (m_warpingFilesMissing == warpingMissing && m_blendMaskFilesMissing == blendMaskMissing) {
+        return;
+    }
+    m_warpingFilesMissing = warpingMissing;
+    m_blendMaskFilesMissing = blendMaskMissing;
+    Q_EMIT configFeatureIssuesChanged();
+}
+
+void SliceController::applyConfigFeatureAvailability(bool warpingAvailable, bool blendMaskAvailable)
+{
+    if (m_warpingAvailable != warpingAvailable || m_blendMaskAvailable != blendMaskAvailable) {
+        m_warpingAvailable = warpingAvailable;
+        m_blendMaskAvailable = blendMaskAvailable;
+        Q_EMIT configFeatureAvailabilityChanged();
+    }
+
+    // An unavailable feature must be unchecked as well so the generated command never passes
+    // -warping/-blend-mask for assets the current config does not provide.
+    if (warpingAvailable) {
+        if (!m_warping) {
+            m_warping = true;
+            Q_EMIT warpingChanged();
+        }
+    } else if (m_warping) {
+        m_warping = false;
+        Q_EMIT warpingChanged();
+    }
+
+    if (blendMaskAvailable) {
+        if (!m_blendMask) {
+            m_blendMask = true;
+            Q_EMIT blendMaskChanged();
+        }
+    } else if (m_blendMask) {
+        m_blendMask = false;
+        Q_EMIT blendMaskChanged();
+    }
 }
 
 void SliceController::setSequenceIndexing(bool sequenceIndexing)

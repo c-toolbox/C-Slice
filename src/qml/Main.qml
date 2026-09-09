@@ -592,13 +592,31 @@ Kirigami.ApplicationWindow {
         }
     }
 
-    FileDialog {
+    // QtQuick.Dialogs only applies FileDialog.currentFolder when the dialog is shown for the first time;
+    // afterwards the native dialog keeps its last-used folder. Recreating the dialog before each open
+    // resets that state so it always starts in the current configuration's directory.
+    Component {
+        id: configDialogComponent
+        FileDialog {
+            parentWindow: window
+            title: qsTr("Choose SGCT configuration")
+            currentFolder: app.pathToUrl(controller.configurationDialogFolder())
+            nameFilters: [ qsTr("SGCT JSON configurations (*.json)"), qsTr("All files (*)") ]
+            onAccepted: controller.configuration = app.urlToPath(selectedFile)
+        }
+    }
+    Loader {
         id: configDialog
-        parentWindow: window
-        title: qsTr("Choose SGCT configuration")
-        currentFolder: app.pathToUrl(app.sliceDataPath("configs"))
-        nameFilters: [ qsTr("SGCT JSON configurations (*.json)"), qsTr("All files (*)") ]
-        onAccepted: controller.configuration = app.urlToPath(selectedFile)
+        active: false
+        sourceComponent: configDialogComponent
+
+        function open() {
+            active = false
+            active = true
+            if (item) {
+                item.open()
+            }
+        }
     }
     FileDialog {
         id: leftDialog
@@ -1137,7 +1155,19 @@ Kirigami.ApplicationWindow {
                         rowSpacing: Kirigami.Units.smallSpacing
                         columnSpacing: Kirigami.Units.smallSpacing
 
-                        FormLabel { text: qsTr("Directory") }
+                        RowLayout {
+                            Layout.fillWidth: true
+                            spacing: Kirigami.Units.smallSpacing
+
+                            FormLabel { text: qsTr("Directory"); Layout.fillWidth: true }
+                            ToolButton {
+                                icon.name: "system-file-manager"
+                                icon.color: Kirigami.Theme.textColor
+                                onClicked: controller.openOutputDirectory()
+                                ToolTip.text: qsTr("Open output directory in file explorer")
+                                ToolTip.visible: hovered
+                            }
+                        }
                         TextField { id: outputDirectoryField; text: controller.outputDirectory; Layout.fillWidth: true; onTextEdited: controller.outputDirectory = text }
                         BrowseButton { dialog: outputDialog; icon.name: "folder-open" }
 
@@ -1146,7 +1176,7 @@ Kirigami.ApplicationWindow {
                         Item { height: 1; width: 1 }
 
                         FormLabel { text: qsTr("SGCT config") }
-                        TextField { text: controller.configuration; Layout.fillWidth: true; onEditingFinished: controller.configuration = text }
+                        TextField { id: configurationField; text: controller.configuration; Layout.fillWidth: true; onEditingFinished: controller.configuration = text }
                         BrowseButton { dialog: configDialog }
 
                         FormLabel { text: qsTr("Config options") }
@@ -1155,8 +1185,32 @@ Kirigami.ApplicationWindow {
                             Layout.columnSpan: 2
                             spacing: Kirigami.Units.smallSpacing
 
-                            CheckBox { checked: controller.warping; text: qsTr("Warping"); onToggled: controller.warping = checked }
-                            CheckBox { checked: controller.blendMask; text: qsTr("Blend mask"); onToggled: controller.blendMask = checked }
+                            CheckBox {
+                                id: warpingCheckBox
+                                text: qsTr("Warping")
+                                enabled: controller.warpingAvailable
+                                checked: controller.warping
+                                onToggled: controller.warping = checked
+                            }
+                            CheckBox {
+                                id: blendMaskCheckBox
+                                text: qsTr("Blend mask")
+                                enabled: controller.blendMaskAvailable
+                                checked: controller.blendMask
+                                onToggled: controller.blendMask = checked
+                            }
+                        }
+
+                        Kirigami.InlineMessage {
+                            Layout.fillWidth: true
+                            Layout.columnSpan: 3
+                            type: controller.configStatus.toLowerCase().indexOf("missing") >= 0 || controller.configStatus.toLowerCase().indexOf("could not read") >= 0
+                                ? Kirigami.MessageType.Warning
+                                : Kirigami.MessageType.Positive
+                            icon.source: type === Kirigami.MessageType.Warning ? "dialog-warning" : "dialog-ok"
+                            visible: controller.configStatus.length > 0
+                            text: controller.configStatus
+                            showCloseButton: false
                         }
 
                         FormLabel { text: qsTr("Outputs") }

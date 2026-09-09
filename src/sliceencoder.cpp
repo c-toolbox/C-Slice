@@ -321,18 +321,37 @@ bool SliceEncoder::init(const std::filesystem::path &filename, int width, int he
         ? reinterpret_cast<AVHWFramesContext *>(m_encoderHardwareFramesContext->data)->sw_format
         : m_codecContext->pix_fmt;
 
-    m_swsContext = sws_getContext(m_width,
-        m_height,
-        m_inputPixelFormat,
-        m_width,
-        m_height,
-        conversionPixelFormat,
-        SWS_FAST_BILINEAR,
-        nullptr,
-        nullptr,
-        nullptr);
+    // Allocate SwsContext manually using the modern FFmpeg API.
+    // This allows explicit control over the thread count for multi-threaded scaling.
+    m_swsContext = static_cast<SwsContext*>(sws_alloc_context());
     if (!m_swsContext) {
-        std::fprintf(stderr, "Could not allocate frame conversion context\n");
+        std::fprintf(stderr, "Could not allocate SwsContext\n");
+        return false;
+    }
+
+    // Set scaling parameters via av_opt_set
+    av_opt_set_int(m_swsContext, "srcw", m_width, 0);
+    av_opt_set_int(m_swsContext, "srch", m_height, 0);
+    av_opt_set_int(m_swsContext, "dstw", m_width, 0);
+    av_opt_set_int(m_swsContext, "dsth", m_height, 0);
+    av_opt_set_int(m_swsContext, "src_format", m_inputPixelFormat, 0);
+    av_opt_set_int(m_swsContext, "dst_format", conversionPixelFormat, 0);
+    av_opt_set_int(m_swsContext, "flags", SWS_FAST_BILINEAR, 0);
+
+    // Set explicit thread count for multi-threaded scaling/color conversion
+    unsigned int swsThreads = std::max(2u, std::thread::hardware_concurrency());
+    swsThreads = std::min(swsThreads, std::max(1u, maxEncoderThreads));
+    if (m_codecContext->codec_id == AV_CODEC_ID_HEVC) {
+        swsThreads = std::min(swsThreads, 16u);
+    }
+    av_opt_set_int(m_swsContext, "threads", static_cast<int>(swsThreads), 0);
+
+    // Initialize the context
+    ret = sws_init_context(m_swsContext, nullptr, nullptr);
+    if (ret < 0) {
+        std::fprintf(stderr, "Could not initialize SwsContext: %s\n", av_err2str(ret));
+        sws_freeContext(m_swsContext);
+        m_swsContext = nullptr;
         return false;
     }
 
@@ -525,12 +544,16 @@ bool SliceEncoder::convertPixelsToFrame(AVFrame *outFrame, AVFrame *tmpFrame, co
         return false;
     }
 
+    // Zero-copy vertical flip: point to the last row and use negative line size.
+    // This is the original technique and has zero CPU overhead.
     tmpFrame->data[0] += tmpFrame->linesize[0] * (m_height - 1);
     tmpFrame->linesize[0] = -tmpFrame->linesize[0];
 
-    ret = sws_scale(m_swsContext, tmpFrame->data, tmpFrame->linesize, 0, m_height, outFrame->data, outFrame->linesize);
+    // sws_scale_frame is a multi-threaded alternative to sws_scale that provides
+    // better performance for large frames (4K/8K) by utilizing multiple CPU cores.
+    ret = sws_scale_frame(m_swsContext, outFrame, tmpFrame);
     if (ret < 0) {
-        std::fprintf(stderr, "Failed to convert frame %d\n", m_frameCounter);
+        std::fprintf(stderr, "Failed to convert frame %d: %s\n", m_frameCounter, av_err2str(ret));
         return false;
     }
 

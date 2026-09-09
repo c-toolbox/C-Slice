@@ -179,7 +179,7 @@ std::vector<ImageSequenceFrameInfo> ImageSequenceUtils::collectImageSequenceFram
         }
 
         const QString stem = entry.completeBaseName();
-        if (!stem.startsWith(pattern.prefix)) {
+        if (!stem.startsWith(pattern.prefix, Qt::CaseInsensitive)) {
             continue;
         }
 

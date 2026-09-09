@@ -543,13 +543,10 @@ void SliceRenderer::renderLayerWithWarp(const sgct::RenderData& data,
 {
     const sgct::Viewport* viewport = dynamic_cast<const sgct::Viewport*>(&data.viewport);
     WarpViewportState* warpState = warpViewportState(data);
-    if (!viewport || !warpState || !ensureWarpViewportLoaded(*warpState, *viewport) || !m_warpProgram || !ensureWarpTarget(data.window.id(), data.bufferSize)) {
-        renderLayer(data, layer, currentEye, domeAngle, gridModeOverride);
-        return;
-    }
 
-    WarpTarget& target = m_warpTargets[static_cast<std::size_t>(data.window.id())];
-
+    // Save the caller's GL state before loading or creating resources. Those may
+    // temporarily change bindings (e.g. the framebuffer) and must not leak into
+    // either the saved state below or the fallback path.
     GLint previousFramebuffer = 0;
     GLint previousViewport[4] = { 0, 0, 0, 0 };
     GLboolean previousScissorTest = GL_FALSE;
@@ -558,6 +555,14 @@ void SliceRenderer::renderLayerWithWarp(const sgct::RenderData& data,
     glGetIntegerv(GL_VIEWPORT, previousViewport);
     previousScissorTest = glIsEnabled(GL_SCISSOR_TEST);
     glGetIntegerv(GL_SCISSOR_BOX, previousScissorBox);
+
+    if (!viewport || !warpState || !ensureWarpViewportLoaded(*warpState, *viewport) || !m_warpProgram || !ensureWarpTarget(data.window.id(), data.bufferSize)) {
+        glBindFramebuffer(GL_FRAMEBUFFER, static_cast<GLuint>(previousFramebuffer));
+        renderLayer(data, layer, currentEye, domeAngle, gridModeOverride);
+        return;
+    }
+
+    WarpTarget& target = m_warpTargets[static_cast<std::size_t>(data.window.id())];
 
     glBindFramebuffer(GL_FRAMEBUFFER, target.framebuffer);
     glDrawBuffer(GL_COLOR_ATTACHMENT0);
@@ -639,13 +644,20 @@ bool SliceRenderer::ensureWarpTarget(int windowId, sgct::ivec2 size)
     glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA8, size.x, size.y, 0, GL_RGBA, GL_UNSIGNED_BYTE, nullptr);
     glBindTexture(GL_TEXTURE_2D, 0);
 
+    GLint previousFramebuffer = 0;
+    glGetIntegerv(GL_FRAMEBUFFER_BINDING, &previousFramebuffer);
+
     glGenFramebuffers(1, &target.framebuffer);
     glBindFramebuffer(GL_FRAMEBUFFER, target.framebuffer);
     glFramebufferTexture2D(GL_FRAMEBUFFER, GL_COLOR_ATTACHMENT0, GL_TEXTURE_2D, target.texture, 0);
     const GLenum drawBuffer = GL_COLOR_ATTACHMENT0;
     glDrawBuffers(1, &drawBuffer);
     const bool complete = glCheckFramebufferStatus(GL_FRAMEBUFFER) == GL_FRAMEBUFFER_COMPLETE;
-    glBindFramebuffer(GL_FRAMEBUFFER, 0);
+
+    // Restore the caller's framebuffer binding. Binding the default framebuffer (0) here
+    // would clobber the offscreen window framebuffer that SGCT renders into, which made
+    // the first warped frame render to the wrong target and capture as black.
+    glBindFramebuffer(GL_FRAMEBUFFER, static_cast<GLuint>(previousFramebuffer));
     if (!complete) {
         glDeleteFramebuffers(1, &target.framebuffer);
         glDeleteTextures(1, &target.texture);

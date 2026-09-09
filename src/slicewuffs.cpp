@@ -8,6 +8,7 @@
 #include "slicewuffs.h"
 
 #include <algorithm>
+#include <cstdio>
 #include <cstdint>
 #include <cstdlib>
 #include <fstream>
@@ -16,7 +17,6 @@
 
 #define WUFFS_IMPLEMENTATION
 #define WUFFS_CONFIG__STATIC_FUNCTIONS
-#define WUFFS_CONFIG__DISABLE_MSVC_CPU_ARCH__X86_64_FAMILY
 #define WUFFS_CONFIG__MODULES
 #define WUFFS_CONFIG__MODULE__BASE
 #define WUFFS_CONFIG__MODULE__ADLER32
@@ -52,7 +52,10 @@ struct DecoderSlot {
 
 bool readFile(const std::filesystem::path& path, std::vector<unsigned char>& bytes, std::string* errorMessage)
 {
-    std::ifstream file(path, std::ios::binary | std::ios::ate);
+    // Use C stdio (fopen/fseek/fread) instead of std::ifstream: single-pass
+    // read with less C++ iostream overhead and no double seeking. Faster for
+    // the per-frame blocking reads done by the image decode workers.
+    std::FILE* file = std::fopen(path.string().c_str(), "rb");
     if (!file) {
         if (errorMessage) {
             *errorMessage = "Could not open image file '" + path.string() + "'";
@@ -60,14 +63,23 @@ bool readFile(const std::filesystem::path& path, std::vector<unsigned char>& byt
         return false;
     }
 
-    const std::streamsize size = file.tellg();
+    if (std::fseek(file, 0, SEEK_END) != 0) {
+        std::fclose(file);
+        if (errorMessage) {
+            *errorMessage = "Could not seek image file '" + path.string() + "'";
+        }
+        return false;
+    }
+    const long size = std::ftell(file);
     if (size <= 0) {
+        std::fclose(file);
         if (errorMessage) {
             *errorMessage = "Image file is empty: '" + path.string() + "'";
         }
         return false;
     }
-    else if (size > static_cast<std::streamsize>(std::numeric_limits<int>::max())) {
+    else if (size > static_cast<long>(std::numeric_limits<int>::max())) {
+        std::fclose(file);
         if (errorMessage) {
             *errorMessage = "Image file is too large for Wuffs STB-compatible loading: '" + path.string() + "'";
         }
@@ -75,8 +87,16 @@ bool readFile(const std::filesystem::path& path, std::vector<unsigned char>& byt
     }
 
     bytes.resize(static_cast<std::size_t>(size));
-    file.seekg(0, std::ios::beg);
-    if (!file.read(reinterpret_cast<char*>(bytes.data()), size)) {
+    if (std::fseek(file, 0, SEEK_SET) != 0) {
+        std::fclose(file);
+        if (errorMessage) {
+            *errorMessage = "Could not seek image file '" + path.string() + "'";
+        }
+        return false;
+    }
+    const std::size_t readCount = std::fread(bytes.data(), 1, static_cast<std::size_t>(size), file);
+    std::fclose(file);
+    if (readCount != static_cast<std::size_t>(size)) {
         if (errorMessage) {
             *errorMessage = "Could not read image file '" + path.string() + "'";
         }
