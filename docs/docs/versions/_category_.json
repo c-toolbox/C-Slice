@@ -1,0 +1,9 @@
+{
+  "label": "Versions",
+  "position": 8,
+  "link": {
+    "type": "generated-index",
+    "slug": "/versions",
+    "description": "Release notes and version history for C-Slice."
+  }
+}

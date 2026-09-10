@@ -122,6 +122,7 @@ CMakeLists.txt.user*
 # VS Code
 .vscode/*
 
-# Build directory and files
-build/*
+# Build directory and files (anchored to repo root so the docs section
+# docs/docs/build/ is not ignored)
+/build/*
 build_*
