@@ -6,7 +6,7 @@
 set(TARGET_NAME C-Slice)
 set(CSLICE_VERSION_MAJOR 1)
 set(CSLICE_VERSION_MINOR 0)
-set(CSLICE_VERSION_PATCH 1)
+set(CSLICE_VERSION_PATCH 2)
 #set(CSLICE_VERSION_PR_NAME "Beta")
 #set(CSLICE_VERSION_PR_VERS 1)
 
@@ -72,16 +72,6 @@ target_sources(${TARGET_NAME}
 )
 
 source_group(TREE ${CMAKE_CURRENT_SOURCE_DIR} PREFIX "Cpp" FILES ${CSLICE_SOURCE_FILES})
-
-if(BUILD_WITH_VCPKG_SUPPORT)
-    option(SGCT_DEP_INCLUDE_LIBPNG "Include LibPNG library" OFF)
-    option(SGCT_DEP_INCLUDE_ZLIB "Include ZLIB library" OFF)
-    option(SGCT_DEP_INCLUDE_TINYXML "Include TinyXML library" OFF)
-else()
-    option(SGCT_DEP_INCLUDE_LIBPNG "Include LibPNG library" ON)
-    option(SGCT_DEP_INCLUDE_ZLIB "Include ZLIB library" ON)
-    option(SGCT_DEP_INCLUDE_ZLIB "Include ZLIB library" ON)
-endif()
 
 find_package(QT NAMES Qt6)
 if(${QT_VERSION_MAJOR} GREATER_EQUAL 6 AND ${QT_VERSION_MINOR} GREATER_EQUAL 8)
@@ -194,41 +184,29 @@ if(WIN32)
     set_target_properties(${TARGET_NAME} PROPERTIES WIN32_EXECUTABLE TRUE)
 endif()
 
-option(SGCT_FREETYPE_SUPPORT "Build SGCT with Freetype2" ON)
 option(SGCT_SPOUT_SUPPORT "SGCT Spout support" OFF)
 option(SGCT_NDI_SUPPORT "SGCT NDI Support" OFF)
-option(SGCT_DEP_INCLUDE_FREETYPE "Include FreeType library" OFF)
 option(SGCT_BUILD_TESTS "Build SGCT tests" OFF)
-if(BUILD_WITH_VCPKG_SUPPORT)
-    find_package(unofficial-minizip CONFIG REQUIRED)
-    if(TARGET unofficial::minizip::minizip)
-        if(NOT TARGET minizip)
-            add_library(minizip INTERFACE IMPORTED GLOBAL)
-            target_link_libraries(minizip INTERFACE unofficial::minizip::minizip)
-        endif()
-        if(NOT TARGET minizip::minizip)
-            add_library(minizip::minizip INTERFACE IMPORTED GLOBAL)
-            target_link_libraries(minizip::minizip INTERFACE unofficial::minizip::minizip)
-        endif()
-    endif()
-endif()
-set(SCN_USE_EXTERNAL_FAST_FLOAT OFF CACHE BOOL "Use an external FastFloat package for scnlib" FORCE)
-set(SCN_DISABLE_FAST_FLOAT ON CACHE BOOL "Use std::from_chars instead of fetching FastFloat for scnlib" FORCE)
+option(SGCT_BUILD_CALIBRATOR "Build the SGCT calibrator application" OFF)
 set(BUILD_SHARED_LIBS OFF CACHE BOOL "Build shared libraries" FORCE)
-if(POLICY CMP0169)
-    cmake_policy(PUSH)
-    cmake_policy(SET CMP0169 OLD)
+# SGCT links MINIZIP::minizip, which vcpkg's minizip port only provides from 1.3.2
+find_package(minizip CONFIG REQUIRED)
+if(NOT TARGET MINIZIP::minizip AND NOT TARGET MINIZIP::minizipstatic AND TARGET unofficial::minizip::minizip)
+    add_library(MINIZIP::minizip INTERFACE IMPORTED GLOBAL)
+    target_link_libraries(MINIZIP::minizip INTERFACE unofficial::minizip::minizip)
 endif()
 add_subdirectory(${CMAKE_CURRENT_SOURCE_DIR}/sgct)
-if(POLICY CMP0169)
-    cmake_policy(POP)
-endif()
 
 # The C-Slice encoder must compile against the same FFmpeg headers that it links to.
 # Put the selected FFmpeg include directory before vcpkg/Craft/SGCT transitive includes.
 target_include_directories(${TARGET_NAME} BEFORE PRIVATE ${CSLICE_FFMPEG_INCLUDE_DIR})
 target_include_directories(${TARGET_NAME} PRIVATE ${CMAKE_CURRENT_SOURCE_DIR} ${CMAKE_CURRENT_SOURCE_DIR}/../src ${CSLICE_WUFFS_RELEASE_DIR} ${Libmpv_INCLUDE_DIRS})
 target_link_libraries(${TARGET_NAME} PRIVATE ${TARGET_LIBRARIES})
+# A static SGCT only links the stb_image declarations; the executable provides the implementation
+if(NOT BUILD_SHARED_LIBS)
+    find_package(stbimage CONFIG REQUIRED)
+    target_link_libraries(${TARGET_NAME} PRIVATE unofficial::stbimage::stbimage-read-impl)
+endif()
 target_compile_features(${TARGET_NAME} PRIVATE cxx_std_23)
 target_compile_definitions(${TARGET_NAME} PRIVATE $<$<OR:$<CONFIG:Debug>,$<CONFIG:RelWithDebInfo>>:QT_QML_DEBUG>)
 if(DEFINED CSLICE_VERSION_PR_NAME AND DEFINED CSLICE_VERSION_PR_VERS)
@@ -289,19 +267,32 @@ if(CSLICE_INSTALL_DEPENDENCIES)
 
     set_property(TARGET ${TARGET_NAME} PROPERTY VS_DEBUGGER_WORKING_DIRECTORY $<TARGET_FILE_DIR:${TARGET_NAME}>)
     if(WIN32 AND CSLICE_INSTALL_DEPENDENCIES)
+        if(NOT CSLICE_FFMPEG_RUNTIME_DIR)
+            set(CSLICE_FFMPEG_RUNTIME_DIR "${_ffmpeg_bin_dir}")
+        endif()
+        if(NOT CSLICE_FFMPEG_RUNTIME_DLLS)
+            file(GLOB CSLICE_FFMPEG_RUNTIME_DLLS
+                "${CSLICE_FFMPEG_RUNTIME_DIR}/av*.dll"
+                "${CSLICE_FFMPEG_RUNTIME_DIR}/sw*.dll"
+                "${CSLICE_FFMPEG_RUNTIME_DIR}/postproc*.dll")
+        endif()
         set_property(TARGET ${TARGET_NAME} PROPERTY VS_DEBUGGER_ENVIRONMENT "PATH=${CSLICE_FFMPEG_RUNTIME_DIR};%PATH%")
-        add_custom_command(TARGET ${TARGET_NAME} POST_BUILD
-            COMMAND ${CMAKE_COMMAND} -E copy_if_different
-                ${CSLICE_FFMPEG_RUNTIME_DLLS}
-                $<TARGET_FILE_DIR:${TARGET_NAME}>
-            COMMENT "Copying selected C-Slice FFmpeg runtime DLLs")
+        if(CSLICE_FFMPEG_RUNTIME_DLLS)
+            add_custom_command(TARGET ${TARGET_NAME} POST_BUILD
+                COMMAND ${CMAKE_COMMAND} -E copy_if_different
+                    ${CSLICE_FFMPEG_RUNTIME_DLLS}
+                    $<TARGET_FILE_DIR:${TARGET_NAME}>
+                COMMENT "Copying selected C-Slice FFmpeg runtime DLLs")
+        else()
+            message(WARNING "No FFmpeg runtime DLLs found in '${CSLICE_FFMPEG_RUNTIME_DIR}'; set CSLICE_FFMPEG_RUNTIME_DLLS to copy them next to ${TARGET_NAME}")
+        endif()
     endif()
 
     # Check if we are on Windows 11 (Build number 22000 or higher) or Windows 10 (Build number 10240 or higher)
-    cmake_host_system_information(RESULT OS_VERSION QUERY OS_VERSION)
-    string(REGEX MATCH "[0-9]+" OS_BUILD_NUM "${OS_VERSION}")
+    # OS_RELEASE is e.g. "10.0.26200"; Windows 11 still reports major version 10
+    cmake_host_system_information(RESULT OS_RELEASE QUERY OS_RELEASE)
 
-    if(${OS_BUILD_NUM} VERSION_GREATER_EQUAL 22000)
+    if(OS_RELEASE VERSION_GREATER_EQUAL 10.0.22000)
         message("Windows 11 or above detected, recommended to copy all DLLS from path instead of using GET_RUNTIME_DEPENDENCIES")
         set(INSTALL_GRP FALSE)
         set(INSTALL_DFP TRUE)
@@ -313,7 +304,7 @@ if(CSLICE_INSTALL_DEPENDENCIES)
 
     option(CSLICE_INSTALL_GET_RUNTIME_DEPENDENCIES "When running INSTALL, look for dependencies with GET_RUNTIME_DEPENDENCIES and copy them" ${INSTALL_GRP})
     if(CSLICE_INSTALL_GET_RUNTIME_DEPENDENCIES)
-        if(SGCT_DEP_INCLUDE_SCALABLE)
+        if(SGCT_SCALABLE_SUPPORT)
             set(_scalable_dir ${CMAKE_CURRENT_SOURCE_DIR}/sgct/ext/scalable)
         endif()
         set(MY_DEPENDENCY_PATHS ${_ffmpeg_bin_dir} ${_qt_bin_dir} ${_scalable_dir})
@@ -353,7 +344,7 @@ if(CSLICE_INSTALL_DEPENDENCIES)
         if(BUILD_WITH_VCPKG_SUPPORT)
             list(APPEND CIDFPL "${VCPKG_INSTALLED_DIR}/${VCPKG_TARGET_TRIPLET}/bin")
         endif()
-        if(SGCT_DEP_INCLUDE_SCALABLE)
+        if(SGCT_SCALABLE_SUPPORT)
             list(APPEND CIDFPL ${CMAKE_CURRENT_SOURCE_DIR}/sgct/ext/scalable)
         endif()
 

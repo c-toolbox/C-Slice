@@ -45,6 +45,7 @@ public:
 
     void initializeGL(double radius, double fov);
     void configureWarping(std::vector<WarpWindowConfig> windows);
+    void setStraightAlphaOutput(bool straightAlpha);
     void updateMeshes(double radius, double fov);
     void renderLayer(const sgct::RenderData& data,
         const SliceLayer& layer,
@@ -96,6 +97,7 @@ private:
 
     double m_meshRadius = 0.0;
     double m_meshFov = 0.0;
+    bool m_straightAlphaOutput = false;
     float m_planeWidth = 0.f;
     float m_planeHeight = 0.f;
 

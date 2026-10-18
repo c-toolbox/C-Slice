@@ -1616,6 +1616,15 @@ void SliceController::setUpsideDown(bool upsideDown)
     notifyCommandChanged();
 }
 
+bool SliceController::straightAlpha() const { return m_straightAlpha; }
+void SliceController::setStraightAlpha(bool straightAlpha)
+{
+    if (m_straightAlpha == straightAlpha) return;
+    m_straightAlpha = straightAlpha;
+    Q_EMIT straightAlphaChanged();
+    notifyCommandChanged();
+}
+
 bool SliceController::warping() const { return m_warping; }
 void SliceController::setWarping(bool warping)
 {
@@ -2474,6 +2483,9 @@ QStringList SliceController::buildArguments(bool verifyOnly) const
     }
     if (m_upsideDown) {
         arguments << QStringLiteral("-upsidedown");
+    }
+    if (m_straightAlpha) {
+        arguments << QStringLiteral("-straight-alpha");
     }
     if (m_warping) {
         arguments << QStringLiteral("-warping");
@@ -4209,6 +4221,7 @@ void SliceController::processCJobMessage(const QString &message)
                 QString origOutputName = m_outputName;
                 bool origStereo = m_stereo;
                 bool origUpsideDown = m_upsideDown;
+                bool origStraightAlpha = m_straightAlpha;
                 bool origWarping = m_warping;
                 bool origBlendMask = m_blendMask;
                 int origStartIndex = m_startIndex;
@@ -4268,6 +4281,7 @@ void SliceController::processCJobMessage(const QString &message)
                 setOutputName(storedParams.outputName);
                 setStereo(storedParams.stereo);
                 setUpsideDown(storedParams.upsideDown);
+                setStraightAlpha(storedParams.straightAlpha);
                 setWarping(storedParams.warping);
                 setBlendMask(storedParams.blendMask);
                 setStartIndex(storedParams.startIndex);
@@ -4327,7 +4341,7 @@ void SliceController::processCJobMessage(const QString &message)
 
                 // Restore original settings after launch (queued to avoid signal conflicts)
                 QMetaObject::invokeMethod(this, [this, origLeftInput, origRightInput, origOutputDirectory, origOutputName,
-                    origInputType, origStereo, origUpsideDown, origWarping, origBlendMask,
+                    origInputType, origStereo, origUpsideDown, origStraightAlpha, origWarping, origBlendMask,
                     origStartIndex, origStopIndex, origSteps, origMappingMode,
                     origSurfaceRadius, origSurfaceFov, origLayerStereoMode, origLayerAlpha,
                     origLayerRoiEnabled, origLayerRoiX, origLayerRoiY, origLayerRoiWidth, origLayerRoiHeight,
@@ -4350,6 +4364,7 @@ void SliceController::processCJobMessage(const QString &message)
                     setOutputName(origOutputName);
                     setStereo(origStereo);
                     setUpsideDown(origUpsideDown);
+                    setStraightAlpha(origStraightAlpha);
                     setWarping(origWarping);
                     setBlendMask(origBlendMask);
                     setStartIndex(origStartIndex);
@@ -4465,6 +4480,7 @@ SliceController::JobInfo SliceController::captureCurrentJobSettings() const
     info.outputName = m_outputName;
     info.stereo = m_stereo;
     info.upsideDown = m_upsideDown;
+    info.straightAlpha = m_straightAlpha;
     info.warping = m_warping;
     info.blendMask = m_blendMask;
     info.startIndex = m_startIndex;
@@ -4547,6 +4563,7 @@ void SliceController::applyJobSettings(const JobInfo &info)
     setOutputName(info.outputName);
     setStereo(info.stereo);
     setUpsideDown(info.upsideDown);
+    setStraightAlpha(info.straightAlpha);
     setWarping(info.warping);
     setBlendMask(info.blendMask);
     setStartIndex(info.startIndex);
@@ -4654,6 +4671,7 @@ QJsonObject SliceController::jobInfoToJson(const JobInfo &info)
         { QStringLiteral("leftInput"), info.leftInput }, { QStringLiteral("rightInput"), info.rightInput },
         { QStringLiteral("outputDirectory"), info.outputDirectory }, { QStringLiteral("outputName"), info.outputName },
         { QStringLiteral("stereo"), info.stereo }, { QStringLiteral("upsideDown"), info.upsideDown },
+        { QStringLiteral("straightAlpha"), info.straightAlpha },
         { QStringLiteral("warping"), info.warping }, { QStringLiteral("blendMask"), info.blendMask },
         { QStringLiteral("startIndex"), info.startIndex }, { QStringLiteral("stopIndex"), info.stopIndex },
         { QStringLiteral("steps"), info.steps }, { QStringLiteral("outputCount"), info.outputCount },
@@ -4717,6 +4735,7 @@ bool SliceController::jobInfoFromJson(const QJsonObject &json, JobInfo *info, QS
     // Geometry and stereo settings
     result.stereo = settings.value(QStringLiteral("stereo")).toBool();
     result.upsideDown = settings.value(QStringLiteral("upsideDown")).toBool();
+    result.straightAlpha = settings.value(QStringLiteral("straightAlpha")).toBool();
     result.warping = settings.value(QStringLiteral("warping")).toBool();
     result.blendMask = settings.value(QStringLiteral("blendMask")).toBool();
     result.startIndex = settings.value(QStringLiteral("startIndex")).toInt();
@@ -5060,6 +5079,7 @@ void SliceController::launchNextFromQueue()
     QString origOutputName = m_outputName;
     bool origStereo = m_stereo;
     bool origUpsideDown = m_upsideDown;
+    bool origStraightAlpha = m_straightAlpha;
     bool origWarping = m_warping;
     bool origBlendMask = m_blendMask;
     int origStartIndex = m_startIndex;
@@ -5119,6 +5139,7 @@ void SliceController::launchNextFromQueue()
     setOutputName(info.outputName);
     setStereo(info.stereo);
     setUpsideDown(info.upsideDown);
+    setStraightAlpha(info.straightAlpha);
     setWarping(info.warping);
     setBlendMask(info.blendMask);
     setStartIndex(info.startIndex);
@@ -5185,6 +5206,7 @@ void SliceController::launchNextFromQueue()
     // Restore original settings after launch
     QMetaObject::invokeMethod(this, [this, origLeftInput, origRightInput, origOutputDirectory, origOutputName,
         origInputType, origStereo, origUpsideDown, origWarping, origBlendMask,
+        origStraightAlpha,
         origStartIndex, origStopIndex, origSteps, origMappingMode,
         origSurfaceRadius, origSurfaceFov, origLayerStereoMode, origLayerAlpha,
         origLayerRoiEnabled, origLayerRoiX, origLayerRoiY, origLayerRoiWidth, origLayerRoiHeight,
@@ -5207,6 +5229,7 @@ void SliceController::launchNextFromQueue()
         setOutputName(origOutputName);
         setStereo(origStereo);
         setUpsideDown(origUpsideDown);
+        setStraightAlpha(origStraightAlpha);
         setWarping(origWarping);
         setBlendMask(origBlendMask);
         setStartIndex(origStartIndex);
@@ -5284,6 +5307,7 @@ void SliceController::launchJobAtQueueIndex(int index)
     QString origOutputName = m_outputName;
     bool origStereo = m_stereo;
     bool origUpsideDown = m_upsideDown;
+    bool origStraightAlpha = m_straightAlpha;
     bool origWarping = m_warping;
     bool origBlendMask = m_blendMask;
     int origStartIndex = m_startIndex;
@@ -5343,6 +5367,7 @@ void SliceController::launchJobAtQueueIndex(int index)
     setOutputName(info.outputName);
     setStereo(info.stereo);
     setUpsideDown(info.upsideDown);
+    setStraightAlpha(info.straightAlpha);
     setWarping(info.warping);
     setBlendMask(info.blendMask);
     setStartIndex(info.startIndex);
@@ -5409,6 +5434,7 @@ void SliceController::launchJobAtQueueIndex(int index)
     // Restore original settings after launch
     QMetaObject::invokeMethod(this, [this, origLeftInput, origRightInput, origOutputDirectory, origOutputName,
         origInputType, origStereo, origUpsideDown, origWarping, origBlendMask,
+        origStraightAlpha,
         origStartIndex, origStopIndex, origSteps, origMappingMode,
         origSurfaceRadius, origSurfaceFov, origLayerStereoMode, origLayerAlpha,
         origLayerRoiEnabled, origLayerRoiX, origLayerRoiY, origLayerRoiWidth, origLayerRoiHeight,
@@ -5431,6 +5457,7 @@ void SliceController::launchJobAtQueueIndex(int index)
         setOutputName(origOutputName);
         setStereo(origStereo);
         setUpsideDown(origUpsideDown);
+        setStraightAlpha(origStraightAlpha);
         setWarping(origWarping);
         setBlendMask(origBlendMask);
         setStartIndex(origStartIndex);

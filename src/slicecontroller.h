@@ -43,6 +43,7 @@ class SliceController : public QObject {
     Q_PROPERTY(QString outputDirectoryDialogLocation READ outputDirectoryDialogLocation NOTIFY outputDirectoryDialogLocationChanged)
     Q_PROPERTY(bool stereo READ stereo WRITE setStereo NOTIFY stereoChanged)
     Q_PROPERTY(bool upsideDown READ upsideDown WRITE setUpsideDown NOTIFY upsideDownChanged)
+    Q_PROPERTY(bool straightAlpha READ straightAlpha WRITE setStraightAlpha NOTIFY straightAlphaChanged)
     Q_PROPERTY(bool warping READ warping WRITE setWarping NOTIFY warpingChanged)
     Q_PROPERTY(bool blendMask READ blendMask WRITE setBlendMask NOTIFY blendMaskChanged)
     Q_PROPERTY(int startIndex READ startIndex WRITE setStartIndex NOTIFY startIndexChanged)
@@ -185,6 +186,9 @@ public:
 
     bool upsideDown() const;
     void setUpsideDown(bool upsideDown);
+
+    bool straightAlpha() const;
+    void setStraightAlpha(bool straightAlpha);
 
     bool warping() const;
     void setWarping(bool warping);
@@ -440,6 +444,7 @@ Q_SIGNALS:
     void outputDirectoryDialogLocationChanged();
     void stereoChanged();
     void upsideDownChanged();
+    void straightAlphaChanged();
     void warpingChanged();
     void blendMaskChanged();
     void startIndexChanged();
@@ -575,6 +580,7 @@ private:
     QString m_outputDirectoryDialogLocation;
     bool m_stereo = false;
     bool m_upsideDown = false;
+    bool m_straightAlpha = false;
     bool m_warping = false;
     bool m_blendMask = false;
     int m_startIndex = 0;
@@ -689,6 +695,7 @@ public:
         QString outputName;
         bool stereo = false;
         bool upsideDown = false;
+        bool straightAlpha = false;
         bool warping = false;
         bool blendMask = false;
         int startIndex = 0;

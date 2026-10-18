@@ -496,6 +496,11 @@ void SliceRenderer::updateMeshes(double radius, double fov)
     m_sphereMesh = std::make_unique<SphereGrid>(static_cast<float>(m_meshRadius) / 100.f, 256);
 }
 
+void SliceRenderer::setStraightAlphaOutput(bool straightAlpha)
+{
+    m_straightAlphaOutput = straightAlpha;
+}
+
 void SliceRenderer::renderLayer(const sgct::RenderData& data,
     const SliceLayer& layer,
     sgct::FrustumMode currentEye,
@@ -509,8 +514,13 @@ void SliceRenderer::renderLayer(const sgct::RenderData& data,
 
     glActiveTexture(GL_TEXTURE0);
     glBindTexture(GL_TEXTURE_2D, texture);
-    glEnable(GL_BLEND);
-    glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
+    if (m_straightAlphaOutput) {
+        glDisable(GL_BLEND);
+    }
+    else {
+        glEnable(GL_BLEND);
+        glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
+    }
 
     const int gridMode = gridModeOverride >= 0 ? gridModeOverride : static_cast<int>(layer.gridMode);
     switch (gridMode) {

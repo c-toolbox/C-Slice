@@ -1128,6 +1128,17 @@ Kirigami.ApplicationWindow {
                         Item { height: 1; width: 1 }
                         CheckBox { checked: controller.upsideDown; text: qsTr("Upside down"); onToggled: controller.upsideDown = checked }
                         Item { height: 1; width: 1 }
+
+                        Item { height: 1; width: 1 }
+                        CheckBox {
+                            id: straightAlphaCheckBox
+                            checked: controller.straightAlpha
+                            text: qsTr("Straight alpha")
+                            onToggled: controller.straightAlpha = checked
+                            ToolTip.text: qsTr("Write raw straight-alpha RGB without compositing over black")
+                            ToolTip.visible: hovered
+                        }
+                        Item { height: 1; width: 1 }
                     }
 
                     Kirigami.InlineMessage {

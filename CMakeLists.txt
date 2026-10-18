@@ -12,9 +12,9 @@ if(BUILD_WITH_VCPKG_SUPPORT)
     set(VCPKG_LIBRARY_LINKAGE dynamic)
     set(VCPKG_CRT_LINKAGE dynamic)
     include(${VCPKG_ROOT}/scripts/buildsystems/vcpkg.cmake)
-    set(CMAKE_MAP_IMPORTED_CONFIG_MINSIZEREL MinSizeRel RelWithDebInfo Release Debug)
-    set(CMAKE_MAP_IMPORTED_CONFIG_RELWITHDEBINFO RelWithDebInfo Release MinSizeRel Debug)
-    set(CMAKE_MAP_IMPORTED_CONFIG_RELEASE Release RelWithDebInfo MinSizeRel Debug)
+    set(CMAKE_MAP_IMPORTED_CONFIG_MINSIZEREL MinSizeRel RelWithDebInfo Release Debug "")
+    set(CMAKE_MAP_IMPORTED_CONFIG_RELWITHDEBINFO RelWithDebInfo Release MinSizeRel Debug "")
+    set(CMAKE_MAP_IMPORTED_CONFIG_RELEASE Release RelWithDebInfo MinSizeRel Debug "")
 endif()
 
 project(c-slice LANGUAGES CXX)
@@ -44,11 +44,6 @@ set_package_properties(ECM PROPERTIES TYPE REQUIRED
     DESCRIPTION "extra cmake modules")
 set(CMAKE_MODULE_PATH ${CMAKE_CURRENT_SOURCE_DIR}/cmake ${ECM_MODULE_PATH} ${ECM_KDE_MODULE_DIR})
 
-if (MSVC)
-include(${PROJECT_SOURCE_DIR}/src/sgct/support/cmake/common-compile-settings/platforms/msvc.cmake)
-endif()
-
-include(${PROJECT_SOURCE_DIR}/src/sgct/support/cmake/common-compile-settings/common-compile-settings.cmake)
 include(${PROJECT_SOURCE_DIR}/src/sgct/support/cmake/set_compile_options.cmake)
 
 find_package(Qt6Core ${QT_MIN_VERSION})

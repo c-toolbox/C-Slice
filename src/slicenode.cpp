@@ -89,6 +89,7 @@ struct SliceJob {
     bool upsideDown = false;
     bool warping = false;
     bool blendMask = false;
+    bool straightAlpha = false;
     MappingMode mappingMode = MappingMode::Dome;
     double surfaceRadius = 740.0;
     double surfaceFov = 165.0;
@@ -626,6 +627,9 @@ SliceJob parseSliceArguments(const std::vector<std::string> &arguments)
         else if (arg == "-blend-mask") {
             parsed.blendMask = true;
         }
+        else if (arg == "-straight-alpha") {
+            parsed.straightAlpha = true;
+        }
     }
 
     return parsed;
@@ -782,6 +786,7 @@ void initOpenGL(GLFWwindow *)
 {
     SliceRenderer = std::make_unique<CSlice::SliceRenderer>();
     SliceRenderer->configureWarping(warpWindowConfigs);
+    SliceRenderer->setStraightAlphaOutput(job.straightAlpha);
     SliceRenderer->initializeGL(job.surfaceRadius, job.surfaceFov);
 
     if (sliceLoader) {
