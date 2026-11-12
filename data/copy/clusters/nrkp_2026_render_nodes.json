@@ -1,0 +1,23 @@
+{
+  "name": "nrkp_2026_render_nodes",
+  "description": "The six NRKP render nodes nrkp-node1 ... nrkp-node6, without the GUI machine. Use it to send media, files or folders to the render nodes only, e.g. from the GUI/master machine. Files and folders go to the same path on each node through the administrative shares d$ and e$, with the stored account 'nrkp_2026_cluster'.",
+  "nodes": {
+    "Node1": "nrkp-node1",
+    "Node2": "nrkp-node2",
+    "Node3": "nrkp-node3",
+    "Node4": "nrkp-node4",
+    "Node5": "nrkp-node5",
+    "Node6": "nrkp-node6"
+  },
+  "manifestDestinations": ["\\\\{ip}\\media\\{folder}"],
+  "destinations": {
+    "*": ["\\\\{ip}\\media\\{folder}"]
+  },
+  "driveShares": {
+    "D:": "\\\\{ip}\\d$",
+    "E:": "\\\\{ip}\\e$"
+  },
+  "accounts": {
+    "*": "nrkp_2026_cluster"
+  }
+}

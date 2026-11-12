@@ -50,7 +50,8 @@ section "install"
 	createShortCut "$SMPROGRAMS\${APPNAME}\C-Slice ${VERSIONMAJOR}.${VERSIONMINOR}.lnk" "$INSTDIR\C-Slice.exe"
 	createShortCut "$SMPROGRAMS\${APPNAME}\C-Stitch ${VERSIONMAJOR}.${VERSIONMINOR}.lnk" "$INSTDIR\C-Stitch.exe"
 	createShortCut "$SMPROGRAMS\${APPNAME}\C-Job ${VERSIONMAJOR}.${VERSIONMINOR}.lnk" "$INSTDIR\C-Job.exe"
-	
+	createShortCut "$SMPROGRAMS\${APPNAME}\C-Opy ${VERSIONMAJOR}.${VERSIONMINOR}.lnk" "$INSTDIR\C-Opy.exe"
+
 	# Desktop
 	createShortCut "$DESKTOP\${APPNAME} - C-Slice ${VERSIONMAJOR}.${VERSIONMINOR}.lnk" "$INSTDIR\C-Slice.exe"
 	createShortCut "$DESKTOP\${APPNAME} - C-Stitch ${VERSIONMAJOR}.${VERSIONMINOR}.lnk" "$INSTDIR\C-Stitch.exe"
@@ -89,6 +90,7 @@ section "uninstall"
 	delete "$SMPROGRAMS\${APPNAME}\C-Slice ${VERSIONMAJOR}.${VERSIONMINOR}.lnk"
 	delete "$SMPROGRAMS\${APPNAME}\C-Stitch ${VERSIONMAJOR}.${VERSIONMINOR}.lnk"
 	delete "$SMPROGRAMS\${APPNAME}\C-Job ${VERSIONMAJOR}.${VERSIONMINOR}.lnk"
+	delete "$SMPROGRAMS\${APPNAME}\C-Opy ${VERSIONMAJOR}.${VERSIONMINOR}.lnk"
 	# Try to remove the Start Menu folder - this will only happen if it is empty
 	rmDir "$SMPROGRAMS\${APPNAME}"
 	

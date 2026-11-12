@@ -1,0 +1,89 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!--
+ SPDX-FileCopyrightText: 2026 Erik Sundén
+ SPDX-License-Identifier: GPL-3.0-or-later
+ -->
+<kcfg xmlns="http://www.kde.org/standards/kcfg/1.0"
+      xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+      xsi:schemaLocation="http://www.kde.org/standards/kcfg/1.0
+                          http://www.kde.org/standards/kcfg/1.0/kcfg.xsd" >
+  <!-- Clusters and the current output mapping are stored in the [Clusters] and
+       [CurrentOutputs] groups of the same file by COpyController, and this computer's
+       account per cluster in [ClusterAccounts]. Robocopy profiles are kept in
+       robocopy-profiles.json next to this file. -->
+  <kcfgfile name="C-Opy/copy.conf" />
+  <group name="ApplicationSettings">
+    <entry name="CurrentPreset" key="CurrentCluster" type="String">
+      <label>Name of the cluster that was last applied or saved.</label>
+      <default></default>
+    </entry>
+    <entry name="StartupCluster" type="String">
+      <label>Cluster applied on startup; empty keeps the last used one.</label>
+      <default></default>
+    </entry>
+    <entry name="FileRobocopyProfile" type="String">
+      <label>Robocopy profile for single files (opened files, and movie outputs of manifests).</label>
+      <default>Large files</default>
+    </entry>
+    <entry name="FolderRobocopyProfile" type="String">
+      <label>Robocopy profile for folders (opened folders, and image sequence outputs of manifests).</label>
+      <default>Many small files</default>
+    </entry>
+    <entry name="CopyToSamePath" type="Bool">
+      <label>Copy files and folders to the same path on every node through the cluster's drive shares, instead of to the default rule's destinations.</label>
+      <default>true</default>
+    </entry>
+    <entry name="LocalNode" type="String">
+      <label>Node that is this computer; empty detects it from the host name and network addresses.</label>
+      <default></default>
+    </entry>
+    <entry name="SkipLocalNode" type="Bool">
+      <label>Do not copy to this computer when it is a node of the cluster.</label>
+      <default>true</default>
+    </entry>
+    <entry name="SkipHiddenFiles" type="Bool">
+      <label>Do not copy hidden and system files (robocopy /XA:SH); mirrored destinations lose theirs.</label>
+      <default>false</default>
+    </entry>
+    <entry name="DefaultAccount" type="String">
+      <label>Stored account used when neither the output, the cluster's default rule nor this computer's account for the cluster names one; empty copies as the current Windows user.</label>
+      <default></default>
+    </entry>
+    <entry name="MaxParallel" type="Int">
+      <label>Maximum number of robocopy processes running at the same time.</label>
+      <default>8</default>
+      <min>1</min>
+      <max>32</max>
+    </entry>
+    <entry name="AutoStart" type="Bool">
+      <label>Start copying as soon as a manifest is loaded.</label>
+      <default>false</default>
+    </entry>
+    <entry name="PresetFolder" key="ClusterFolder" type="String">
+      <label>Folder with library cluster files (*.json); empty uses data/copy/clusters next to C-Opy.</label>
+      <default></default>
+    </entry>
+    <entry name="NodeFolder" type="String">
+      <label>Folder with node files (*.json, name and IP address per machine); empty uses C-Opy/nodes in the settings folder.</label>
+      <default></default>
+    </entry>
+  </group>
+  <group name="SystemSettings">
+    <entry name="LastManifestDialogLocation" type="String">
+      <label>Last folder used by the open manifest dialog.</label>
+      <default></default>
+    </entry>
+    <entry name="LastPresetDialogLocation" key="LastClusterDialogLocation" type="String">
+      <label>Last folder used by the import clusters dialog.</label>
+      <default></default>
+    </entry>
+    <entry name="LastSourceDialogLocation" type="String">
+      <label>Last folder used by the open file and open folder dialogs.</label>
+      <default></default>
+    </entry>
+    <entry name="LastDestinationDialogLocation" type="String">
+      <label>Last folder chosen in the destination folder dialog.</label>
+      <default></default>
+    </entry>
+  </group>
+</kcfg>

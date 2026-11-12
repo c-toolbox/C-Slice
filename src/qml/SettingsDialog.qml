@@ -69,6 +69,7 @@ Dialog {
         paramFileField.text = SliceSettings.paramFile
         preferNtscOutputFrameRatesCheck.checked = SliceSettings.preferNtscOutputFrameRates
         preferMatroskaCheck.checked = SliceSettings.preferMatroska
+        openCOpyCheck.checked = SliceSettings.openCOpyAfterSlice
         encoderThreadsSpin.value = SliceSettings.maxEncoderThreads
         captureGpuSlotsSpin.value = SliceSettings.captureGpuSlots
         imageBufferingThreadsSpin.value = SliceSettings.imageBufferingThreadCount
@@ -115,6 +116,7 @@ Dialog {
         SliceSettings.paramFile = paramFileField.text
         SliceSettings.preferNtscOutputFrameRates = preferNtscOutputFrameRatesCheck.checked
         SliceSettings.preferMatroska = preferMatroskaCheck.checked
+        SliceSettings.openCOpyAfterSlice = openCOpyCheck.checked
         SliceSettings.maxEncoderThreads = encoderThreadsSpin.value
         SliceSettings.captureGpuSlots = captureGpuSlotsSpin.value
         SliceSettings.imageBufferingThreadCount = imageBufferingThreadsSpin.value
@@ -169,6 +171,7 @@ Dialog {
         paramFileField.text = ""
         preferNtscOutputFrameRatesCheck.checked = SliceSettings.defaultPreferNtscOutputFrameRatesValue
         preferMatroskaCheck.checked = SliceSettings.defaultPreferMatroskaValue
+        openCOpyCheck.checked = SliceSettings.defaultOpenCOpyAfterSliceValue
         encoderThreadsSpin.value = SliceSettings.defaultMaxEncoderThreadsValue
         captureGpuSlotsSpin.value = SliceSettings.defaultCaptureGpuSlotsValue
         imageBufferingThreadsSpin.value = SliceSettings.defaultImageBufferingThreadCountValue
@@ -750,6 +753,14 @@ Dialog {
                     id: preferMatroskaCheck
                     Kirigami.FormData.label: qsTr("Container:")
                     text: qsTr("Prefer Matroska (*.mkv)")
+                }
+
+                CheckBox {
+                    id: openCOpyCheck
+                    Kirigami.FormData.label: qsTr("After slicing:")
+                    text: qsTr("Open outputs in C-Opy")
+                    ToolTip.text: qsTr("Every finished slice writes <name>.c-opy.json to the output folder. When checked, it is also opened in C-Opy to copy each output to its machines.")
+                    ToolTip.visible: hovered
                 }
 
                 RowLayout {

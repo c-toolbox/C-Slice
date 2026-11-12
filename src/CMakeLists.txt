@@ -376,3 +376,6 @@ endif()
 
 # --- Include C-Job via git subtree ---
 add_subdirectory(cjob/src)
+
+# --- C-Opy (robocopy front-end for slice outputs) ---
+add_subdirectory(copy/src)

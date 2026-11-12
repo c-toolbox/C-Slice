@@ -177,6 +177,10 @@
       <label>Default video decoding mode. "Software" uses software rendering (default, most compatible). "Hardware" disables software rendering for hardware decoding. "Hybrid" uses hardware decoding for the left eye and software rendering for the right eye.</label>
       <default>Software</default>
     </entry>
+    <entry name="OpenCOpyAfterSlice" type="Bool">
+      <label>Open the C-Opy manifest of a finished slice in C-Opy.</label>
+      <default>false</default>
+    </entry>
     <entry name="InputFrameRateTolerance" type="Double">
       <label>Tolerance in FPS for matching detected frame rates to standard presets (30, 60, 29.97, 59.94). A higher value matches more values, lower requires closer matches.</label>
       <default>0.07</default>

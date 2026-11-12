@@ -512,6 +512,9 @@ private:
     QStringList buildArguments(bool verifyOnly = false) const;
     QStringList buildAudioMuxArguments(const QString &outputFile, int channelCount, int globalVolume, const QVariantList &channels, QString *error) const;
     QString outputSuffix() const;
+    QJsonObject buildCopyManifest() const;
+    void writeCopyManifest();
+    void launchCOpy(const QString &manifestPath);
     void appendLog(const QString &line);
     void updateOutputCountFromConfiguration();
     void updateConfigFeatureOptions();
@@ -650,6 +653,8 @@ private:
     QString m_processStderrBuffer;
     QString m_lastSliceError;
     bool m_verifyingSlice = false;
+    // Captured at launch: queued jobs restore the UI settings before the slice finishes.
+    QJsonObject m_pendingCopyManifest;
     QString m_logText;
     QString m_sequenceStatus;
     bool m_sequenceIndexing = false;

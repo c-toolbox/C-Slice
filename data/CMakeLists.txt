@@ -33,6 +33,10 @@ if(CSLICE_INSTALL_DEPENDENCIES)
         ]])
         install(DIRECTORY "${PROJECT_SOURCE_DIR}/data/parameters" DESTINATION "${CMAKE_INSTALL_PREFIX}/bin/data" OPTIONAL)
         install(CODE [[
+            message("Copying C-Opy Clusters")
+        ]])
+        install(DIRECTORY "${PROJECT_SOURCE_DIR}/data/copy" DESTINATION "${CMAKE_INSTALL_PREFIX}/bin/data" OPTIONAL)
+        install(CODE [[
 			message("Copying Data Items")
 			file(INSTALL DESTINATION "${CMAKE_INSTALL_PREFIX}/bin/data/images" FILES "${PROJECT_SOURCE_DIR}/data/images/C_transparent.ico")
 			file(INSTALL DESTINATION "${CMAKE_INSTALL_PREFIX}/bin/data/images" FILES "${PROJECT_SOURCE_DIR}/data/images/C_transparent.png")

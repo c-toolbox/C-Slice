@@ -1294,6 +1294,10 @@ SliceController::SliceController(QObject *parent)
         Q_EMIT runningChanged();
     });
     connect(&m_process, qOverload<int, QProcess::ExitStatus>(&QProcess::finished), this, [this](int exitCode, QProcess::ExitStatus exitStatus) {
+            if (exitStatus == QProcess::NormalExit && exitCode == 0 && !m_verifyingSlice) {
+                writeCopyManifest();
+            }
+            m_pendingCopyManifest = QJsonObject();
             handleProcessFinish();
 
             if (exitStatus == QProcess::NormalExit && exitCode == 0 && m_sliceTotalFrames > 0) {
@@ -2469,6 +2473,77 @@ QString SliceController::outputSuffix() const
     return outputContainerSuffix();
 }
 
+QJsonObject SliceController::buildCopyManifest() const
+{
+    // Describes every enabled output so that C-Opy can copy each node's files to its machines.
+    const QDir outputRoot(absolutePathFromWorkingDirectory(m_outputDirectory));
+    const QString filePattern = isMovieCodecName(m_codec)
+        ? QString(m_outputName + outputSuffix())
+        : QString(m_outputName + QStringLiteral("_*") + outputSuffix());
+
+    QJsonArray outputs;
+    for (int i = 0; i < m_outputCount; ++i) {
+        if (!outputEnabled(i)) {
+            continue;
+        }
+        const QString identifier = outputIdentifier(i);
+        outputs.append(QJsonObject {
+            { QStringLiteral("identifier"), identifier },
+            { QStringLiteral("sourceDirectory"), cleanNativePath(outputRoot.filePath(identifier)) },
+            { QStringLiteral("filePattern"), filePattern },
+        });
+    }
+
+    return QJsonObject {
+        { QStringLiteral("format"), QStringLiteral("c-opy-manifest") },
+        { QStringLiteral("version"), 1 },
+        { QStringLiteral("generator"), QStringLiteral("C-Slice " CSLICE_VERSION) },
+        { QStringLiteral("created"), QDateTime::currentDateTime().toString(Qt::ISODate) },
+        { QStringLiteral("jobName"), m_outputName },
+        { QStringLiteral("configuration"), cleanNativePath(configuredSlicePath(m_configuration, QStringLiteral("configs/default.json"))) },
+        { QStringLiteral("outputRoot"), cleanNativePath(outputRoot.absolutePath()) },
+        { QStringLiteral("outputs"), outputs },
+    };
+}
+
+void SliceController::writeCopyManifest()
+{
+    if (m_pendingCopyManifest.isEmpty()) {
+        return;
+    }
+    const QString manifestPath = QDir(m_pendingCopyManifest.value(QStringLiteral("outputRoot")).toString())
+        .filePath(m_pendingCopyManifest.value(QStringLiteral("jobName")).toString() + QStringLiteral(".c-opy.json"));
+
+    QSaveFile file(manifestPath);
+    if (!file.open(QIODevice::WriteOnly) || file.write(QJsonDocument(m_pendingCopyManifest).toJson()) < 0 || !file.commit()) {
+        appendLog(QStringLiteral("Failed to write C-Opy manifest: %1").arg(cleanNativePath(manifestPath)));
+        return;
+    }
+    appendLog(QStringLiteral("Wrote C-Opy manifest: %1").arg(cleanNativePath(manifestPath)));
+
+    if (SliceSettings::openCOpyAfterSlice()) {
+        launchCOpy(manifestPath);
+    }
+}
+
+void SliceController::launchCOpy(const QString &manifestPath)
+{
+#ifdef Q_OS_WIN
+    const QString executable = QStringLiteral("C-Opy.exe");
+#else
+    const QString executable = QStringLiteral("C-Opy");
+#endif
+    // A running C-Opy instance receives the manifest; otherwise a new one starts.
+    const QString program = QDir(QCoreApplication::applicationDirPath()).filePath(executable);
+    if (!QFileInfo::exists(program)) {
+        appendLog(QStringLiteral("C-Opy was not found next to C-Slice: %1").arg(cleanNativePath(program)));
+        return;
+    }
+    if (!QProcess::startDetached(program, { cleanNativePath(manifestPath) })) {
+        appendLog(QStringLiteral("Failed to launch C-Opy: %1").arg(cleanNativePath(program)));
+    }
+}
+
 QStringList SliceController::buildArguments(bool verifyOnly) const
 {
     QStringList arguments;
@@ -2848,6 +2923,7 @@ void SliceController::launchSlice()
 
     const QStringList arguments = buildArguments();
     m_verifyingSlice = false;
+    m_pendingCopyManifest = m_runWithoutEncoding ? QJsonObject() : buildCopyManifest();
     m_slicePaused = false;
     Q_EMIT slicePausedChanged();
     resetSliceProgress();
