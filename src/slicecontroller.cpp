@@ -1278,10 +1278,14 @@ SliceController::SliceController(QObject *parent)
     applyApplicationSettings();
 
     connect(&m_process, &QProcess::readyReadStandardOutput, this, [this]() {
-        handleProcessStdout(QString::fromLocal8Bit(m_process.readAllStandardOutput()));
+        const QString chunk = QString::fromLocal8Bit(m_process.readAllStandardOutput());
+        writeNodeLog(0, chunk);
+        handleProcessStdout(chunk);
     });
     connect(&m_process, &QProcess::readyReadStandardError, this, [this]() {
-        handleProcessStderr(QString::fromLocal8Bit(m_process.readAllStandardError()));
+        const QString chunk = QString::fromLocal8Bit(m_process.readAllStandardError());
+        writeNodeLog(1, chunk);
+        handleProcessStderr(chunk);
     });
     connect(&m_process, &QProcess::started, this, [this]() {
         appendLog(QStringLiteral("Started C-Slice node process."));
@@ -1312,6 +1316,9 @@ SliceController::SliceController(QObject *parent)
                 updateSliceProgress(m_sliceLoadedFrames, m_sliceRenderedFrames, m_sliceTotalFrames, m_sliceCurrentFrame, m_sliceElapsedTime, QStringLiteral("Stopped."));
             }
             appendLog(QStringLiteral("C-Slice node finished with exit code %1 (%2).")
+                .arg(exitCode)
+                .arg(exitStatus == QProcess::NormalExit ? QStringLiteral("normal") : QStringLiteral("crashed")));
+            closeNodeLogFile(QStringLiteral("Node finished with exit code %1 (%2).")
                 .arg(exitCode)
                 .arg(exitStatus == QProcess::NormalExit ? QStringLiteral("normal") : QStringLiteral("crashed")));
             if (m_slicePaused) {
@@ -2737,6 +2744,7 @@ void SliceController::verifySliceInputs()
     updateSliceProgress(0, 0, std::max(1, expectedSliceFrameCount()), m_startIndex, QStringLiteral("00:00:00"), QStringLiteral("Verifying image headers."));
     appendLog(QStringLiteral("Verifying: %1 %2")
         .arg(quoteArgument(QCoreApplication::applicationFilePath()), arguments.join(QLatin1Char(' '))));
+    openNodeLogFile(QStringLiteral("verify"), arguments);
 
     m_process.setProgram(QCoreApplication::applicationFilePath());
     m_process.setArguments(arguments);
@@ -2931,6 +2939,7 @@ void SliceController::launchSlice()
     updateSliceProgress(0, 0, std::max(1, expectedSliceFrameCount()), m_startIndex, QStringLiteral("00:00:00"), QStringLiteral("Launching node process."));
     appendLog(QStringLiteral("Launching: %1 %2")
         .arg(quoteArgument(QCoreApplication::applicationFilePath()), arguments.join(QLatin1Char(' '))));
+    openNodeLogFile(QStringLiteral("slice"), arguments);
 
     m_process.setProgram(QCoreApplication::applicationFilePath());
     m_process.setArguments(arguments);
@@ -3315,6 +3324,94 @@ void SliceController::handleProcessStdout(const QString &chunk)
         }
         handleProcessOutputLine(line);
     }
+}
+
+void SliceController::openNodeLogFile(const QString &kind, const QStringList &arguments)
+{
+    closeNodeLogFile(QString());
+
+    const QString fileName = QStringLiteral("cslice_node_%1_%2.log")
+        .arg(kind, QDateTime::currentDateTime().toString(QStringLiteral("yyyyMMdd_HHmmss")));
+    QStringList candidateDirectories;
+    if (!m_outputDirectory.isEmpty()) {
+        candidateDirectories << QDir(absolutePathFromWorkingDirectory(m_outputDirectory)).filePath(QStringLiteral("logs"));
+    }
+    candidateDirectories << QDir(QCoreApplication::applicationDirPath()).filePath(QStringLiteral("data/log/jobs"));
+
+    for (const QString &directory : std::as_const(candidateDirectories)) {
+        if (!QDir().mkpath(directory)) {
+            continue;
+        }
+        auto *file = new QFile(QDir(directory).filePath(fileName), this);
+        if (!file->open(QIODevice::WriteOnly | QIODevice::Text)) {
+            delete file;
+            continue;
+        }
+        m_nodeLogFile = file;
+        break;
+    }
+
+    if (!m_nodeLogFile) {
+        appendLog(QStringLiteral("Could not create a node log file in: %1").arg(candidateDirectories.join(QStringLiteral(", "))));
+        return;
+    }
+    appendLog(QStringLiteral("Node log: %1").arg(QDir::toNativeSeparators(m_nodeLogFile->fileName())));
+    const QString header = QStringLiteral("%1 [gui] C-Slice %2 %3: %4 %5\n")
+        .arg(QDateTime::currentDateTime().toString(QStringLiteral("yyyy-MM-dd HH:mm:ss.zzz")),
+            QString::fromLatin1(CSLICE_VERSION),
+            kind,
+            quoteArgument(QCoreApplication::applicationFilePath()),
+            arguments.join(QLatin1Char(' ')));
+    m_nodeLogFile->write(header.toUtf8());
+    m_nodeLogFile->flush();
+}
+
+void SliceController::writeNodeLog(int channel, const QString &chunk)
+{
+    if (!m_nodeLogFile || chunk.isEmpty() || channel < 0 || channel > 1) {
+        return;
+    }
+
+    QString &partial = m_nodeLogPartial[channel];
+    partial += chunk;
+    const QString timestamp = QDateTime::currentDateTime().toString(QStringLiteral("HH:mm:ss.zzz"));
+    const QString tag = channel == 0 ? QStringLiteral("out") : QStringLiteral("err");
+    QByteArray text;
+    int newlineIndex = -1;
+    while ((newlineIndex = partial.indexOf(QLatin1Char('\n'))) >= 0) {
+        QString line = partial.left(newlineIndex);
+        partial.remove(0, newlineIndex + 1);
+        if (line.endsWith(QLatin1Char('\r'))) {
+            line.chop(1);
+        }
+        text += QStringLiteral("%1 [%2] %3\n").arg(timestamp, tag, line).toUtf8();
+    }
+    if (!text.isEmpty()) {
+        m_nodeLogFile->write(text);
+        // Flush every chunk so the file is current even if the GUI or node hangs.
+        m_nodeLogFile->flush();
+    }
+}
+
+void SliceController::closeNodeLogFile(const QString &finalLine)
+{
+    if (!m_nodeLogFile) {
+        return;
+    }
+    for (int channel = 0; channel < 2; ++channel) {
+        if (!m_nodeLogPartial[channel].isEmpty()) {
+            writeNodeLog(channel, QStringLiteral("\n"));
+        }
+        m_nodeLogPartial[channel].clear();
+    }
+    if (!finalLine.isEmpty()) {
+        m_nodeLogFile->write(QStringLiteral("%1 [gui] %2\n")
+            .arg(QDateTime::currentDateTime().toString(QStringLiteral("HH:mm:ss.zzz")), finalLine)
+            .toUtf8());
+    }
+    m_nodeLogFile->close();
+    m_nodeLogFile->deleteLater();
+    m_nodeLogFile = nullptr;
 }
 
 void SliceController::handleProcessOutputLine(const QString &line)

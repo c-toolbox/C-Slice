@@ -35,6 +35,17 @@ Confirm that the machine has a compatible NVIDIA GPU and driver. If the job must
 
 Run a short benchmark with **Run without encoding**. If that is stable, the encoder is the bottleneck. If it is still unstable, tune loading threads, GPU slots, disk location, and memory usage.
 
+## Slicing slows down or stops
+
+Each run writes everything the node prints to `<output directory>/logs/cslice_node_<kind>_<date>_<time>.log`. The **Node log** line in the Progress panel shows the exact path. Look for these lines:
+
+- `Throughput rendered … frames/s | LoadThroughput … MB/s … read avg … ms … decode avg … ms`: printed every 10 seconds. If read time is far above decode time and MB/s is flat (for example around 250 MB/s), the input storage or network is the bottleneck. Heavy frames simply take longer, so copy the sequence to local NVMe for faster runs.
+- `SlowRead` / `SlowDecode`: a single image took more than 10 seconds to read or decode. The line names the worker, the frame and the file.
+- `DecodeFailed`: an image could not be decoded. The line includes the reason.
+- `Stall no rendered frame for …s`: printed when no frame has been rendered for 30 seconds, followed by `Stall LoaderState/LoaderSource/LoaderSlot` lines. They show what the render thread is waiting for (input frame, readback slot or encoder) and, for each loader slot, which file it has been working on and for how long. A slot stuck in `Decoding` for minutes on one file usually means a hung network read.
+
+Set the environment variable `CSLICE_STALL_SECONDS` to change the 30-second stall threshold.
+
 ## Video input
 
 ### Metadata does not populate the frame range

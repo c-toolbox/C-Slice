@@ -45,6 +45,14 @@ public:
     DecodeContext& operator=(const DecodeContext&) = delete;
     ~DecodeContext();
 
+    // Timing of the most recent decodeFile() call on this context (for diagnostics).
+    struct Timing {
+        double readMs = 0.0;
+        double decodeMs = 0.0;
+        std::size_t fileBytes = 0;
+    };
+    Timing lastTiming;
+
 private:
     struct Impl;
     std::unique_ptr<Impl> m_impl;

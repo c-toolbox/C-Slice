@@ -12,7 +12,9 @@
 
 #include "slicewuffs.h"
 
+#include <chrono>
 #include <condition_variable>
+#include <cstdint>
 #include <deque>
 #include <filesystem>
 #include <map>
@@ -67,6 +69,14 @@ public:
     int totalFrameCount() const override;
     int effectiveLoadingThreadCount() const override;
     std::optional<VerificationError> takeFirstFailure() override;
+    std::vector<std::string> takeLogMessages() override;
+    std::string takeThroughputReport() override;
+    std::vector<std::string> stallDiagnostics() const override;
+
+    // A single file read or decode slower than this is logged as SlowRead/SlowDecode.
+    // Heavy (~70 MB) frames over a ~250 MB/s share take 3-8 s per read with 16 loaders in
+    // parallel, so the threshold sits above that to flag only real outliers / hangs.
+    static constexpr double SlowOperationMs = 10000.0;
 
     static VerificationResult verifySource(const SourceOptions &sourceOptions,
         VerificationProgressCallback progressCallback = nullptr,
@@ -139,6 +149,22 @@ private:
         int uploadBufferIndex = -1;
         LoaderSlotState state = LoaderSlotState::Idle;
         bool stopping = false;
+        // Diagnostics: when the slot entered its current state, and its decode count.
+        std::chrono::steady_clock::time_point stateSince = std::chrono::steady_clock::now();
+        std::size_t completedDecodes = 0;
+    };
+
+    // Accumulated by worker threads, reported and reset by takeThroughputReport().
+    struct ThroughputStats {
+        std::chrono::steady_clock::time_point since = std::chrono::steady_clock::now();
+        int decodedImages = 0;
+        int failedImages = 0;
+        std::uint64_t bytes = 0;
+        double readMs = 0.0;
+        double decodeMs = 0.0;
+        double maxReadMs = 0.0;
+        double maxDecodeMs = 0.0;
+        std::filesystem::path slowestReadPath;
     };
 
     struct SourceState {
@@ -205,6 +231,10 @@ private:
     std::size_t m_currentFrameSequenceIndex = 0;
     std::optional<std::size_t> m_releasedFrameSequenceIndex;
     std::size_t m_nextScheduleSequenceIndex = 0;
+
+    mutable std::mutex m_diagnosticsMutex;
+    ThroughputStats m_throughput;
+    std::deque<std::string> m_logMessages;
 };
 
 } // namespace CSlice

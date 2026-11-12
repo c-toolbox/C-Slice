@@ -21,15 +21,20 @@
 #define GLFW_INCLUDE_NONE
 #include <GLFW/glfw3.h>
 
+#include <QString>
+#include <QtGlobal>
+
 #include <algorithm>
 #include <atomic>
 #include <chrono>
 #include <cctype>
+#include <condition_variable>
 #include <cstdint>
 #include <filesystem>
 #include <format>
 #include <iostream>
 #include <memory>
+#include <mutex>
 #include <optional>
 #include <string>
 #include <string_view>
@@ -142,6 +147,162 @@ std::chrono::steady_clock::time_point verificationStartTime;
 AVCodecID desiredCodec = AV_CODEC_ID_H264;
 bool movieOutput = true;
 std::vector<CSlice::SliceRenderer::WarpWindowConfig> warpWindowConfigs;
+
+// ---------------------------------------------------------------------------------------
+// Diagnostics watchdog. Runs on its own thread so it still reports when the render thread
+// is blocked (e.g. inside a blocking encoder pump or a hung network read). It prints:
+//   LoadThroughput ...   every ThroughputIntervalSeconds
+//   SlowRead/SlowDecode/DecodeFailed ... as queued by the loader workers
+//   Stall ... + LoaderState/LoaderSource/LoaderSlot lines when no frame has been
+//   rendered for StallSeconds (repeated every StallRepeatSeconds while stalled)
+// ---------------------------------------------------------------------------------------
+namespace diagnostics {
+
+enum class Phase : int {
+    Starting,
+    WaitingForFrame,
+    WaitingForReadbackSlot,
+    Capturing,
+    BlockedOnEncoder,
+    Paused,
+    Finishing
+};
+
+constexpr double ThroughputIntervalSeconds = 10.0;
+// Overridable with the CSLICE_STALL_SECONDS environment variable (e.g. for testing).
+double StallSeconds = 30.0;
+constexpr double StallRepeatSeconds = 60.0;
+
+std::atomic<int> phase = static_cast<int>(Phase::Starting);
+std::atomic<std::int64_t> phaseSinceMs = 0;
+std::atomic<int> rendered = 0;
+std::atomic<int> captured = 0;
+std::atomic<int> current = 0;
+std::mutex stopMutex;
+std::condition_variable stopSignal;
+bool stopRequested = false;
+std::thread thread;
+
+std::int64_t nowMs()
+{
+    return std::chrono::duration_cast<std::chrono::milliseconds>(std::chrono::steady_clock::now().time_since_epoch()).count();
+}
+
+const char *phaseName(Phase value)
+{
+    switch (value) {
+    case Phase::Starting: return "starting";
+    case Phase::WaitingForFrame: return "waiting for input frame from loader";
+    case Phase::WaitingForReadbackSlot: return "waiting for a free readback slot";
+    case Phase::Capturing: return "capturing/encoding";
+    case Phase::BlockedOnEncoder: return "blocked waiting for encoder to accept frames";
+    case Phase::Paused: return "paused";
+    case Phase::Finishing: return "finishing";
+    }
+    return "?";
+}
+
+void setPhase(Phase value)
+{
+    if (phase.exchange(static_cast<int>(value)) != static_cast<int>(value)) {
+        phaseSinceMs = nowMs();
+    }
+}
+
+// One write per line so lines from this thread and the render thread do not interleave.
+void printLine(const std::string &line)
+{
+    std::cout << (line + "\n") << std::flush;
+}
+
+void run()
+{
+    using Clock = std::chrono::steady_clock;
+    const Clock::time_point started = Clock::now();
+    Clock::time_point lastThroughput = started;
+    Clock::time_point lastProgressChange = started;
+    Clock::time_point lastStallReport = Clock::time_point::min();
+    int lastRendered = -1;
+    int renderedAtLastThroughput = rendered.load();
+
+    std::unique_lock lock(stopMutex);
+    while (!stopSignal.wait_for(lock, std::chrono::seconds(1), [] { return stopRequested; })) {
+        const Clock::time_point now = Clock::now();
+        const auto secondsSince = [now](Clock::time_point t) { return std::chrono::duration<double>(now - t).count(); };
+
+        for (const std::string &message : sliceLoader->takeLogMessages()) {
+            printLine(message);
+        }
+
+        const int renderedNow = rendered.load();
+        if (renderedNow != lastRendered) {
+            lastRendered = renderedNow;
+            lastProgressChange = now;
+            lastStallReport = Clock::time_point::min();
+        }
+
+        if (secondsSince(lastThroughput) >= ThroughputIntervalSeconds) {
+            const double interval = secondsSince(lastThroughput);
+            const std::string loaderReport = sliceLoader->takeThroughputReport();
+            printLine(std::format("Throughput rendered {} (+{}) {:.2f} frames/s{}{}",
+                renderedNow,
+                renderedNow - renderedAtLastThroughput,
+                (renderedNow - renderedAtLastThroughput) / interval,
+                loaderReport.empty() ? "" : " | ",
+                loaderReport));
+            renderedAtLastThroughput = renderedNow;
+            lastThroughput = now;
+        }
+
+        const Phase currentPhase = static_cast<Phase>(phase.load());
+        const double stalledFor = secondsSince(lastProgressChange);
+        const bool stallReportDue = lastStallReport == Clock::time_point::min() || secondsSince(lastStallReport) >= StallRepeatSeconds;
+        if (currentPhase != Phase::Paused && currentPhase != Phase::Finishing && stalledFor >= StallSeconds && stallReportDue) {
+            lastStallReport = now;
+            printLine(std::format("Stall no rendered frame for {:.0f}s: rendered {} captured {} current frame {} | render thread {} for {:.1f}s",
+                stalledFor,
+                renderedNow,
+                captured.load(),
+                current.load(),
+                phaseName(currentPhase),
+                (nowMs() - phaseSinceMs.load()) / 1000.0));
+            for (const std::string &line : sliceLoader->stallDiagnostics()) {
+                printLine("Stall " + line);
+            }
+        }
+    }
+}
+
+void start()
+{
+    {
+        std::lock_guard lock(stopMutex);
+        stopRequested = false;
+    }
+    bool overrideOk = false;
+    const double stallOverride = qEnvironmentVariable("CSLICE_STALL_SECONDS").toDouble(&overrideOk);
+    if (overrideOk && stallOverride > 0.0) {
+        StallSeconds = stallOverride;
+    }
+    printLine(std::format("Diagnostics: throughput every {:.0f}s, stall report after {:.0f}s without a rendered frame, slow read/decode threshold {:.0f} ms",
+        ThroughputIntervalSeconds, StallSeconds, CSlice::SliceImageLoader::SlowOperationMs));
+    phaseSinceMs = nowMs();
+    thread = std::thread(run);
+}
+
+void stop()
+{
+    {
+        std::lock_guard lock(stopMutex);
+        stopRequested = true;
+    }
+    stopSignal.notify_all();
+    if (thread.joinable()) {
+        thread.join();
+    }
+}
+
+} // namespace diagnostics
 
 bool movieReadbackQueueFull();
 CSlice::SliceSourceOptions sourceOptions(const std::string &path,
@@ -445,6 +606,9 @@ int loadedFrameCount()
 
 void reportProgress(bool force = false)
 {
+    diagnostics::rendered = renderedFrames;
+    diagnostics::captured = capturedFrames;
+    diagnostics::current = currentFrameIndex;
     const int loadedFrames = loadedFrameCount();
     const int percent = totalFrames > 0
         ? std::clamp(static_cast<int>((100.0 * static_cast<double>(renderedFrames)) / static_cast<double>(totalFrames)), 0, 100)
@@ -836,6 +1000,7 @@ void postSyncPreDraw()
     }
 
     if (pauseRequested) {
+        diagnostics::setPhase(diagnostics::Phase::Paused);
         shouldCapture = false;
         reportProgress(false);
         return;
@@ -879,17 +1044,20 @@ void postSyncPreDraw()
     }
 
     if (!frameReady || (loadedFrameIndex > 0 && loadedFrameIndex != currentFrameIndex)) {
+        diagnostics::setPhase(diagnostics::Phase::WaitingForFrame);
         shouldCapture = false;
         reportProgress(false);
         return;
     }
 
     if (movieOutput && !job.noReadback && movieReadbackQueueFull()) {
+        diagnostics::setPhase(diagnostics::Phase::WaitingForReadbackSlot);
         shouldCapture = false;
         reportProgress(false);
         return;
     }
 
+    diagnostics::setPhase(diagnostics::Phase::Capturing);
     shouldCapture = true;
 }
 
@@ -1107,6 +1275,7 @@ void postDraw()
 
     const std::vector<std::unique_ptr<sgct::Window>> &windows = sgct::Engine::instance().windows();
     while (!fatalEncodingError && movieOutput && movieReadbackQueueFull()) {
+        diagnostics::setPhase(diagnostics::Phase::BlockedOnEncoder);
         bool submittedFrame = false;
         if (!pumpMovieOutputs(submittedFrame, true)) {
             fatalEncodingError = true;
@@ -1193,6 +1362,7 @@ void postDraw()
 
 void cleanup()
 {
+    diagnostics::setPhase(diagnostics::Phase::Finishing);
     const std::vector<std::unique_ptr<sgct::Window>> &windows = sgct::Engine::instance().windows();
     for (size_t i = 0; i < windowOutputs.size() && i < windows.size(); ++i) {
         if (movieOutput && windowOutputs[i].active() && !windowOutputs[i].finish(*windows[i])) {
@@ -1202,6 +1372,8 @@ void cleanup()
     }
     windowOutputs.clear();
 
+    // The watchdog reads the loader, so it must stop before the loader is destroyed.
+    diagnostics::stop();
     sliceLoader.reset();
     SliceRenderer.reset();
 
@@ -1299,6 +1471,7 @@ bool prepareSliceLoader()
     }
 
     sliceLoader->startLoading();
+    diagnostics::start();
     std::cout << std::format("{} loader using {} worker thread-owned texture slot(s), requested {}\n",
         inputTypeString(job.inputType),
         sliceLoader->effectiveLoadingThreadCount(),
@@ -1526,12 +1699,14 @@ int CSlice::Node::run(int argc, char **argv)
     }
     catch (const std::runtime_error &e) {
         sgct::Log::Error(e.what());
+        diagnostics::stop();
         sgct::Engine::destroy();
         return EXIT_FAILURE;
     }
 
     startTime = sgct::time();
     sgct::Engine::instance().exec();
+    diagnostics::stop();
     sgct::Engine::destroy();
     return receivedTerminate ? EXIT_FAILURE : EXIT_SUCCESS;
 }

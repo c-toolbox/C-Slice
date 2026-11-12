@@ -409,6 +409,117 @@ std::optional<SliceImageLoader::VerificationError> SliceImageLoader::takeFirstFa
     m_failures.pop_front();
     return failure;
 }
+
+std::vector<std::string> SliceImageLoader::takeLogMessages()
+{
+    std::lock_guard lock(m_diagnosticsMutex);
+    std::vector<std::string> messages(std::make_move_iterator(m_logMessages.begin()), std::make_move_iterator(m_logMessages.end()));
+    m_logMessages.clear();
+    return messages;
+}
+
+std::string SliceImageLoader::takeThroughputReport()
+{
+    ThroughputStats stats;
+    {
+        std::lock_guard lock(m_diagnosticsMutex);
+        stats = m_throughput;
+        m_throughput = ThroughputStats{};
+    }
+
+    const double seconds = std::chrono::duration<double>(std::chrono::steady_clock::now() - stats.since).count();
+    const int images = stats.decodedImages + stats.failedImages;
+    if (seconds <= 0.0) {
+        return {};
+    }
+    const double megabytes = static_cast<double>(stats.bytes) / (1024.0 * 1024.0);
+    return std::format("LoadThroughput {:.1f}s images {} failed {} | {:.1f} images/s {:.1f} MB/s avg {:.1f} MB | read avg {:.0f} ms max {:.0f} ms | decode avg {:.0f} ms max {:.0f} ms | slowest read {}",
+        seconds,
+        images,
+        stats.failedImages,
+        images / seconds,
+        megabytes / seconds,
+        images > 0 ? megabytes / images : 0.0,
+        images > 0 ? stats.readMs / images : 0.0,
+        stats.maxReadMs,
+        images > 0 ? stats.decodeMs / images : 0.0,
+        stats.maxDecodeMs,
+        stats.slowestReadPath.empty() ? std::string("-") : stats.slowestReadPath.filename().string());
+}
+
+std::vector<std::string> SliceImageLoader::stallDiagnostics() const
+{
+    const auto now = std::chrono::steady_clock::now();
+    const auto slotStateName = [](LoaderSlotState state) {
+        switch (state) {
+        case LoaderSlotState::Idle: return "Idle";
+        case LoaderSlotState::DecodeQueued: return "DecodeQueued";
+        case LoaderSlotState::Decoding: return "Decoding";
+        case LoaderSlotState::Decoded: return "Decoded(waiting for upload)";
+        case LoaderSlotState::Failed: return "Failed";
+        case LoaderSlotState::Stopping: return "Stopping";
+        }
+        return "?";
+    };
+    const auto bufferStateName = [](DecodeBuffer::State state) {
+        switch (state) {
+        case DecodeBuffer::State::Empty: return "Empty";
+        case DecodeBuffer::State::Decoding: return "Decoding";
+        case DecodeBuffer::State::Decoded: return "Decoded";
+        case DecodeBuffer::State::Uploading: return "Uploading";
+        case DecodeBuffer::State::Uploaded: return "Uploaded";
+        case DecodeBuffer::State::Failed: return "Failed";
+        }
+        return "?";
+    };
+
+    std::vector<std::string> lines;
+    std::lock_guard lock(m_mutex);
+    lines.push_back(std::format("LoaderState currentFrame {} currentSeq {} nextScheduleSeq {} releasedSeq {} paused {} stopping {} slots {}",
+        m_currentFrameIndex,
+        m_currentFrameSequenceIndex,
+        m_nextScheduleSequenceIndex,
+        m_releasedFrameSequenceIndex ? std::to_string(*m_releasedFrameSequenceIndex) : std::string("none"),
+        m_paused,
+        m_stopping,
+        m_loaderSlots.size()));
+
+    for (const SourceState &source : m_sources) {
+        const FrameSlot *frame = frameForIndex(source, m_currentFrameIndex);
+        lines.push_back(std::format("LoaderSource {} loaded {}/{} tracked {} | current frame {}: {}",
+            source.identifier,
+            source.loadedFrameCount,
+            source.totalFrameCount,
+            source.frames.size(),
+            m_currentFrameIndex,
+            frame
+                ? std::format("queued {} decoding {} decoded {} uploaded {} failed {} texture {} {}",
+                      frame->queued, frame->decoding, frame->decoded, frame->uploaded, frame->failed, frame->textureId,
+                      frame->path.filename().string())
+                : std::string("not tracked")));
+    }
+
+    for (std::size_t i = 0; i < m_loaderSlots.size(); ++i) {
+        const LoaderSlot &slot = *m_loaderSlots[i];
+        std::lock_guard slotLock(slot.mutex);
+        std::string buffers;
+        for (const DecodeBuffer &buffer : slot.buffers) {
+            buffers += std::format(" [{} src {} frame {} {}]",
+                bufferStateName(buffer.state),
+                buffer.sourceIndex,
+                buffer.frameIndex,
+                buffer.path.empty() ? std::string("-") : buffer.path.filename().string());
+        }
+        lines.push_back(std::format("LoaderSlot {} {} for {:.1f}s decodes {} texture {}{}",
+            i,
+            slotStateName(slot.state),
+            std::chrono::duration<double>(now - slot.stateSince).count(),
+            slot.completedDecodes,
+            slot.textureAssigned ? std::format("src {} frame {}", slot.textureSourceIndex, slot.textureFrameIndex) : std::string("free"),
+            buffers));
+    }
+    return lines;
+}
 void SliceImageLoader::applyRenderOptions(SliceLayer &layer, const RenderOptions &options)
 {
     layer.gridMode = options.gridMode;
@@ -775,6 +886,7 @@ void SliceImageLoader::scheduleFramesLocked()
         frame->queued = true;
         frame->decoding = true;
         slot.state = LoaderSlotState::DecodeQueued;
+        slot.stateSince = std::chrono::steady_clock::now();
         slot.decodeBufferIndex = 1 - slot.decodeBufferIndex;
     }
 }
@@ -799,25 +911,71 @@ void SliceImageLoader::workerLoop(std::size_t workerIndex)
 
             bufferIndex = 1 - slot.decodeBufferIndex;
             slot.state = LoaderSlotState::Decoding;
+            slot.stateSince = std::chrono::steady_clock::now();
             slot.buffers[bufferIndex].state = DecodeBuffer::State::Decoding;
         }
 
         DecodeBuffer &buffer = slot.buffers[bufferIndex];
         std::string error;
         const bool ok = Wuffs::decodeFile(buffer.path, buffer.image, slot.decodeContext, &error);
+        const Wuffs::DecodeContext::Timing timing = slot.decodeContext.lastTiming;
 
         const std::size_t sourceIndex = buffer.sourceIndex;
         const std::size_t sequenceIndex = buffer.sequenceIndex;
         const std::string errorMessage = ok ? std::string{} : (error.empty() ? "Could not decode image" : error);
+
+        {
+            std::lock_guard diagnosticsLock(m_diagnosticsMutex);
+            ThroughputStats &stats = m_throughput;
+            if (ok) {
+                ++stats.decodedImages;
+            }
+            else {
+                ++stats.failedImages;
+            }
+            stats.bytes += timing.fileBytes;
+            stats.readMs += timing.readMs;
+            stats.decodeMs += timing.decodeMs;
+            if (timing.readMs > stats.maxReadMs) {
+                stats.maxReadMs = timing.readMs;
+                stats.slowestReadPath = buffer.path;
+            }
+            stats.maxDecodeMs = std::max(stats.maxDecodeMs, timing.decodeMs);
+            if (timing.readMs >= SlowOperationMs) {
+                m_logMessages.push_back(std::format("SlowRead worker {} frame {} {:.0f} ms {:.1f} MB {}",
+                    workerIndex, buffer.frameIndex, timing.readMs, timing.fileBytes / (1024.0 * 1024.0), buffer.path.string()));
+            }
+            if (timing.decodeMs >= SlowOperationMs) {
+                m_logMessages.push_back(std::format("SlowDecode worker {} frame {} {:.0f} ms {}",
+                    workerIndex, buffer.frameIndex, timing.decodeMs, buffer.path.string()));
+            }
+            if (!ok) {
+                m_logMessages.push_back(std::format("DecodeFailed worker {} frame {} after read {:.0f} ms: {}",
+                    workerIndex, buffer.frameIndex, timing.readMs, errorMessage));
+            }
+        }
+
         {
             std::lock_guard slotLock(slot.mutex);
             if (slot.stopping) {
                 return;
             }
             buffer.error = errorMessage;
-            buffer.state = ok ? DecodeBuffer::State::Decoded : DecodeBuffer::State::Failed;
-            slot.uploadBufferIndex = bufferIndex;
-            slot.state = ok ? LoaderSlotState::Decoded : LoaderSlotState::Failed;
+            ++slot.completedDecodes;
+            slot.stateSince = std::chrono::steady_clock::now();
+            if (ok) {
+                buffer.state = DecodeBuffer::State::Decoded;
+                slot.uploadBufferIndex = bufferIndex;
+                slot.state = LoaderSlotState::Decoded;
+            }
+            else {
+                // Nothing to upload: return the slot to the pool right away. Previously the
+                // slot stayed in Failed forever, so with "continue on error" every failed
+                // image permanently removed one loader slot until loading stalled.
+                buffer.state = DecodeBuffer::State::Failed;
+                slot.uploadBufferIndex = -1;
+                slot.state = LoaderSlotState::Idle;
+            }
         }
 
         {
@@ -936,6 +1094,7 @@ void SliceImageLoader::uploadDecodedSlots(int frameIndex, bool forceCurrentFrame
             buffer.state = DecodeBuffer::State::Uploaded;
             slot.uploadBufferIndex = -1;
             slot.state = LoaderSlotState::Idle;
+            slot.stateSince = std::chrono::steady_clock::now();
         }
         slot.workAvailable.notify_all();
     }

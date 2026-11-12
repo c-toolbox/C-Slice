@@ -8,7 +8,9 @@
 #include "slicewuffs.h"
 
 #include <algorithm>
+#include <chrono>
 #include <cstdio>
+#include <functional>
 #include <cstdint>
 #include <cstdlib>
 #include <fstream>
@@ -327,10 +329,25 @@ bool readImageInfo(const std::filesystem::path& path, ImageInfo& info, DecodeCon
 
 bool decodeFile(const std::filesystem::path& path, Image& image, DecodeContext& context, std::string* errorMessage)
 {
+    using Clock = std::chrono::steady_clock;
+    const auto msSince = [](Clock::time_point start) {
+        return std::chrono::duration<double, std::milli>(Clock::now() - start).count();
+    };
+    context.lastTiming = {};
+    const Clock::time_point readStart = Clock::now();
     std::vector<unsigned char>& bytes = context.m_impl->encodedBytes;
-    if (!readFile(path, bytes, errorMessage)) {
+    const bool readOk = readFile(path, bytes, errorMessage);
+    context.lastTiming.readMs = msSince(readStart);
+    if (!readOk) {
         return false;
     }
+    context.lastTiming.fileBytes = bytes.size();
+    const Clock::time_point decodeStart = Clock::now();
+    struct DecodeTimer {
+        DecodeContext::Timing &timing;
+        std::function<double()> elapsed;
+        ~DecodeTimer() { timing.decodeMs = elapsed(); }
+    } decodeTimer{ context.lastTiming, [&]() { return msSince(decodeStart); } };
 
     wuffs_base__slice_u8 sourceSlice = wuffs_base__make_slice_u8(bytes.data(), bytes.size());
     DecoderKind kind = DecoderKind::Bmp;

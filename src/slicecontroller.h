@@ -8,6 +8,7 @@
 #ifndef CSLICE_SLICECONTROLLER_H
 #define CSLICE_SLICECONTROLLER_H
 
+#include <QFile>
 #include <QObject>
 #include <QProcess>
 #include <QThread>
@@ -548,6 +549,11 @@ private:
         const QVariantMap &rightSequence);
     void handleProcessStdout(const QString &chunk);
     void handleProcessStderr(const QString &chunk);
+    // Per-job node log: everything the node prints is also written, timestamped, to
+    // <output directory>/logs/cslice_node_<date>_<time>.log so stalls leave a record.
+    void openNodeLogFile(const QString &kind, const QStringList &arguments);
+    void writeNodeLog(int channel, const QString &chunk);
+    void closeNodeLogFile(const QString &finalLine);
     void handleProcessOutputLine(const QString &line);
     void setSliceError(const QString &message);
     void addFailedFile(const QString &path, const QString &message);
@@ -645,6 +651,8 @@ private:
     QString m_imageErrorBehavior = QStringLiteral("Continue");
     QString m_videoDecodingMode = QStringLiteral("Software");
     QProcess m_process;
+    QFile *m_nodeLogFile = nullptr;
+    QString m_nodeLogPartial[2];
     QProcess m_audioMuxProcess;
     SliceEstimateThread *m_sliceEstimateThread = nullptr;
     ImageSequenceIndexThread *m_imageSequenceIndexThread = nullptr;

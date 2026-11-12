@@ -96,6 +96,15 @@ public:
     virtual int totalFrameCount() const = 0;
     virtual int effectiveLoadingThreadCount() const = 0;
     virtual std::optional<SliceVerificationError> takeFirstFailure() = 0;
+
+    // Diagnostics. Called from the render thread only; loaders that do not track
+    // these return empty values.
+    // Log lines queued by worker threads (e.g. slow reads), drained by the caller.
+    virtual std::vector<std::string> takeLogMessages() { return {}; }
+    // One-line summary of throughput since the previous call; resets the counters.
+    virtual std::string takeThroughputReport() { return {}; }
+    // Multi-line dump of the loader's internal state, used when progress stalls.
+    virtual std::vector<std::string> stallDiagnostics() const { return {}; }
 };
 
 } // namespace CSlice
